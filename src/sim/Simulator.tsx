@@ -10,20 +10,32 @@ import { Vector3 } from "three";
 import { t } from "../i18n";
 import { CACHE_BUST, effectiveJob, frameCountProbeUrl, type State } from "../core/state";
 import { mountsFor } from "../core/mounts";
-import { SLOTS } from "../core/db";
+import { SLOTS, type BuiltinEffect, type FootprintSteps } from "../core/db";
 import { useAppState, useDispatch } from "../state/AppStateContext";
 import { Engine } from "./render/engine";
 import { Character } from "./render/character";
 import { Pet } from "./pet";
 import PetDialog from "./PetDialog";
 import { EffectBillboard } from "./render/effect";
+import { FootprintTrail } from "./render/footprint";
+import { FootstepEmitter } from "./footsteps";
+import { SpriteBillboard } from "./render/spriteBillboard";
+import { disposeBundle, loadSpriteBundle, type SpriteBundle } from "./spriteEffect";
 import { WorldEffects } from "./render/worldEffects";
-import { loadEffect } from "./effect";
+import { loadEffect, type LoadedEffect } from "./effect";
 import { CursorAnimator } from "./cursor";
 import { loadImage } from "./imageCache";
 import { buildWorld, type MapManifest, type World } from "./render/scene";
 import { findPath } from "./pathfind";
-import { SPRITE_DEAD, SPRITE_FRAMES, SPRITE_IDLE, SPRITE_SIT, SPRITE_WALK, spriteUrl } from "./sprite";
+import {
+  SPRITE_DEAD,
+  SPRITE_FRAMES,
+  SPRITE_IDLE,
+  SPRITE_SIT,
+  SPRITE_WALK,
+  spriteUrl,
+  UNITS_PER_PX,
+} from "./sprite";
 import { fetchApngInfo, frameAt, type ApngInfo } from "./apng";
 import { Walker } from "./walker";
 import { BgmPlayer } from "./bgm";
@@ -175,6 +187,8 @@ export default function Simulator({ onClose }: { onClose: () => void }) {
     let petEntity: Pet | null = null;
     let worldEffects: WorldEffects | null = null;
     let disposeEffects: (() => void) | null = null;
+    let disposeTrail: (() => void) | null = null;
+    let disposeBuiltin: (() => void) | null = null;
     let disposed = false;
     // Each pose's composited frame count + per-frame delays (probed at load, and
     // re-probed when the mount swaps the rendered sprite — see the loop below).
@@ -250,8 +264,13 @@ export default function Simulator({ onClose }: { onClose: () => void }) {
     const desiredEffectKeys = (st: State): string[] => {
       const keys: string[] = [];
       for (const slot of SLOTS) {
-        const key = st.equipped[slot]?.effect;
-        if (key && !keys.includes(key)) keys.push(key);
+        // Both layers draw the same way: an effect-only costume and the graphic
+        // stone enchanted into that position are each a ".str" bundle played on
+        // the character. A stone whose effect ragassets hasn't shipped has no
+        // key and simply contributes nothing.
+        for (const key of [st.equipped[slot]?.effect, st.enchants[slot]?.effect]) {
+          if (key && !keys.includes(key)) keys.push(key);
+        }
       }
       return keys;
     };
@@ -277,7 +296,112 @@ export default function Simulator({ onClose }: { onClose: () => void }) {
     };
     disposeEffects = clearEffects;
 
+    // Footprints ("Pegadas"): the graphic stones the client stamps on the ground
+    // per footstep instead of playing on the body. Only one can be enchanted (they
+    // are all Capa), so there is one trail at a time — rebuilt when the stone
+    // changes, and fed the walker's position each frame.
+    //
+    // `stride`/`gap` arrive as the client states them; the one conversion this
+    // side makes is that they are RO sprite pixels, the same unit every other
+    // .str dimension is in, turned into the walker's cell space with
+    // UNITS_PER_PX. If ragassets' report says otherwise, this is the line.
+    let trail: FootprintTrail | null = null;
+    let steps: FootstepEmitter | null = null;
+    let trailStoneId = 0;
+    let trailToken = 0;
+    const clearTrail = () => {
+      trail?.dispose();
+      trail = null;
+      steps = null;
+    };
+    const footprintOf = (st: State): { id: number; steps: FootprintSteps } | null => {
+      for (const slot of SLOTS) {
+        const stone = st.enchants[slot];
+        if (stone?.steps) return { id: stone.id, steps: stone.steps };
+      }
+      return null;
+    };
+    const syncTrail = (st: State) => {
+      const fp = footprintOf(st);
+      if ((fp?.id ?? 0) === trailStoneId) return;
+      trailStoneId = fp?.id ?? 0;
+      clearTrail();
+      const token = ++trailToken;
+      if (!fp) return;
+      // Both halves of both feet, deduped — most footprints use one file per half.
+      const keys = [fp.steps.bottomLeft, fp.steps.bottomRight, fp.steps.topLeft, fp.steps.topRight]
+        .filter((k): k is string => !!k)
+        .filter((k, i, a) => a.indexOf(k) === i);
+      Promise.all(
+        keys.map((k) => loadEffect(k).then((e) => [k, e] as const).catch(() => null)),
+      ).then((loaded) => {
+        if (disposed || token !== trailToken) return;
+        const bundles = new Map<string, LoadedEffect>();
+        for (const entry of loaded) if (entry) bundles.set(entry[0], entry[1]);
+        if (!bundles.size) return;
+        trail = new FootprintTrail(engine!.scene, fp.steps, bundles);
+        steps = new FootstepEmitter(
+          fp.steps.stride * UNITS_PER_PX,
+          fp.steps.gap * UNITS_PER_PX,
+        );
+      });
+    };
+    disposeTrail = clearTrail;
+
+    // Built-in effects: the stones the client draws from its own effect table
+    // rather than from a .str (see core/db.ts BuiltinEffect). Two shapes — one
+    // resizes the character, the other plays a looping .spr attached to it.
+    let builtinSprite: SpriteBillboard | null = null;
+    let builtinBundle: SpriteBundle | null = null;
+    let builtinKey = "";
+    let builtin: BuiltinEffect | null = null;
+    let builtinToken = 0;
+    const clearBuiltinSprite = () => {
+      builtinSprite?.dispose();
+      builtinSprite = null;
+      if (builtinBundle) disposeBundle(builtinBundle);
+      builtinBundle = null;
+    };
+    const builtinOf = (st: State): BuiltinEffect | null => {
+      for (const slot of SLOTS) {
+        const b = st.enchants[slot]?.builtin;
+        if (b) return b;
+      }
+      return null;
+    };
+    const syncBuiltin = (st: State) => {
+      builtin = builtinOf(st);
+      const key = builtin?.kind === "sprite" ? builtin.key : "";
+      if (key === builtinKey) return;
+      builtinKey = key;
+      clearBuiltinSprite();
+      const token = ++builtinToken;
+      if (!key) return;
+      loadSpriteBundle(key)
+        .then((bundle) => {
+          if (disposed || token !== builtinToken) return;
+          builtinBundle = bundle;
+          // Straight alpha, not additive: ragassets composites these frames with
+          // a real alpha channel (84% / 44% transparent), so they are cut-out art
+          // — adding them would blow out the lit parts and box the rest.
+          // The offsets are applied per frame through `rise`, since the head
+          // anchor moves with the pose and with whatever hat is on.
+          builtinSprite = new SpriteBillboard(engine!.scene, bundle, {
+            scale: 1,
+            additive: false,
+            lift: 0,
+            anchorH: 0,
+          });
+        })
+        .catch((err) => console.error("[sim] builtin effect load failed", key, err));
+    };
+    disposeBuiltin = clearBuiltinSprite;
+
     const charWorld = new Vector3();
+    const printPos = new Vector3(); // reused per stamped footprint
+    // Reused each frame: SpriteBillboard reads it synchronously, so one mutable
+    // object beats allocating per frame (same trick as worldEffects' SMOKE_DYN).
+    const spriteDyn = { alpha: 1, scaleMul: 1, rise: 0 };
     let effectClock = 0; // monotonic; drives effect playback independent of pose
     engine.start((dt) => {
       cursor?.update(dt);
@@ -285,6 +409,8 @@ export default function Simulator({ onClose }: { onClose: () => void }) {
       if (!walker || !world || !character) return;
       world.update(dt);
       syncEffects(stateRef.current);
+      syncTrail(stateRef.current);
+      syncBuiltin(stateRef.current);
       effectClock += dt;
       // Mount changed → re-probe the new sprite's frame info, then reset the
       // animator cache so it rebuilds frames with the correct counts.
@@ -299,6 +425,27 @@ export default function Simulator({ onClose }: { onClose: () => void }) {
       walker.update(dt);
       // X is negated to match the scene's mirrored (RO) X axis.
       charWorld.set(-walker.worldX(), -walker.worldY(), walker.worldZ());
+
+      // Footprints: hand the emitter where we are and stamp whatever it says
+      // landed since last frame. Each print sits on the ground at its own cell,
+      // not the character's — that's the whole point, they stay behind.
+      if (trail) {
+        if (steps) {
+          for (const print of steps.advance(walker.px, walker.py)) {
+            const gx = Math.floor(print.x);
+            const gy = Math.floor(print.y);
+            printPos.set(
+              -print.x * world.cellSize,
+              -world.gat.heightAt(gx, gy, print.x - gx, print.y - gy),
+              print.y * world.cellSize,
+            );
+            // The emitter's angle is in cell space, where +x runs opposite the
+            // scene's mirrored X — negate so the mark turns the way we walk.
+            trail.stamp(printPos, -print.angle, print.side);
+          }
+        }
+        trail.update(dt, engine!.cam.camera);
+      }
       engine!.cam.setTarget(charWorld);
 
       // Displayed frame = (camera facing + entity facing) % 8, so the
@@ -315,8 +462,21 @@ export default function Simulator({ onClose }: { onClose: () => void }) {
       aClock += dt;
       const fi = frames.length ? frameAt(aClock, aInfo) : 0;
       const frame = frames[fi];
+      // EF 421 (Miniatura) is a resize and nothing else: the client sets the
+      // entity's size to half. Applied before the draw so the feet stay put.
+      character.setScale(builtin?.kind === "scale" ? builtin.scale : 1);
       if (frame && frame.complete && frame.naturalWidth) {
         character.update(frame, charWorld, engine!.cam.camera);
+      }
+      // …and the attached .spr effects, placed after the character so they can
+      // anchor to the frame it has just measured. `head` sits the effect on top
+      // of the drawn sprite (a tall hat moves it); the table's yOffset is RO
+      // screen space, where negative is up. Both ride `rise`, which is the
+      // camera-up axis — the one a screen-space offset belongs on.
+      if (builtinSprite && builtin?.kind === "sprite") {
+        spriteDyn.rise =
+          (builtin.head ? character.headOffset() : 0) - (builtin.yOffset ?? 0) * UNITS_PER_PX;
+        builtinSprite.update(effectClock, charWorld, engine!.cam.camera, spriteDyn);
       }
 
       // Pet companion: lazily spawned on first selection, then follows the
@@ -363,6 +523,11 @@ export default function Simulator({ onClose }: { onClose: () => void }) {
       }
       worldEffects?.dispose(); // retire the old map's in-world effects + their billboards
       worldEffects = null;
+      // Prints are anchored to world coordinates, not to the character, so any
+      // still playing belong to the map being torn down. Drop them and let the
+      // next frame rebuild the trail at the new spawn.
+      clearTrail();
+      trailStoneId = 0;
       engine!.setFog(null); // clear the old map's fog while the next one loads
       walker = null;
       cursor = null;
@@ -580,6 +745,8 @@ export default function Simulator({ onClose }: { onClose: () => void }) {
       canvas.removeEventListener("contextmenu", onContextMenu);
       window.removeEventListener("keydown", onKey);
       disposeEffects?.();
+      disposeTrail?.();
+      disposeBuiltin?.();
       worldEffects?.dispose();
       petEntity?.dispose();
       character?.dispose();

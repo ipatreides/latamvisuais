@@ -2067,8 +2067,12 @@ button:disabled {
   background: var(--accent-soft);
 }
 
-/* An empty slot is clickable — it filters the catalogue to that slot. */
-.slot-card:not(.is-filled) {
+/* An empty row is clickable — it filters the catalogue to that position, the
+   costume line to its visuals and the stone line to its graphic stones. The
+   cursor lives on the rows rather than the card because the two are separate
+   targets now. */
+.slot-card:not(.is-filled) .slot-body,
+.slot-stone:not(.is-filled) {
   cursor: pointer;
 }
 
@@ -2130,6 +2134,82 @@ button:disabled {
 .slot-effect svg {
   width: 15px;
   height: 15px;
+}
+
+/* A graphic stone whose effect the client keeps in its own code, with no file to
+   extract: it can't be drawn anywhere, not even on the map. Same glyph as the
+   map marker above, dimmed — lit means "the map shows this". */
+.slot-effect.is-unavailable {
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+/* ---- the graphic stone enchanted into the slot's costume ----
+   A second, quieter line under the costume: same layout, smaller type and a
+   rule above it, so it reads as something attached to the costume rather than
+   as a fifth slot. */
+.slot-stone {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 22px;
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--border);
+}
+
+.slot-stone-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex: none;
+}
+
+.slot-stone .slot-effect svg {
+  width: 13px;
+  height: 13px;
+}
+
+.slot-stone-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.slot-stone.is-filled .slot-stone-name {
+  color: var(--fg);
+}
+
+/* "sem prévia" / "pegada", beside the stone's name — the states that change
+   whether anything will be drawn, readable without hovering the glyph. */
+.slot-stone-note {
+  flex: none;
+  font-size: 0.62rem;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* A stone with no costume under it: impossible in game (the stone is an enchant
+   *inside* a visual), so it's flagged rather than shown as a valid build. */
+.slot-stone-warn {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
 }
 
 .slot-clear {
@@ -2419,6 +2499,21 @@ button:disabled {
 
 .catalog-item.is-equipped {
   background-image: url("https://assets.latam-tools.com.br/icons/ui/bt_hairstyle_select.png");
+}
+
+/* Graphic stones share the grid with the costumes; the corner dot is what says
+   a tile puts an enchant *inside* a visual instead of replacing it. Kept to a
+   marker rather than a different frame so the grid still reads as one set. */
+.catalog-item.is-stone::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  pointer-events: none;
 }
 
 .catalog-icon {

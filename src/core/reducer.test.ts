@@ -6,6 +6,7 @@ import { makeDb } from "../test/fixtures";
 const db = makeDb();
 const reduce = createAppReducer(db);
 const item = (id: number) => db.costumes.find((c) => c.id === id)!;
+const stone = (id: number) => db.stones.find((s) => s.id === id)!;
 
 describe("createAppReducer", () => {
   it("re-clamps after a class change (gender lock applies immediately)", () => {
@@ -95,6 +96,7 @@ describe("createAppReducer", () => {
         hairColor: 1,
         clothesColor: 1,
         equipped: { top: item(100) },
+        enchants: {},
         outfit: null,
         mount: null,
         pet: null,
@@ -109,5 +111,45 @@ describe("createAppReducer", () => {
     expect(next.action).toBe(0);
     expect(next.bodyDir).toBe(3);
     expect(next.headDir).toBe(2);
+  });
+
+  // Graphic stones are enchants INSIDE a costume, so the two layers must not
+  // touch each other — the bug this guards against is a stone behaving like
+  // another costume and knocking the visual out of the slot.
+  describe("graphic stones", () => {
+    it("enchants a slot without disturbing the costume in it", () => {
+      const worn = reduce(initialState(db), { type: "toggleEquip", item: item(100) });
+      const next = reduce(worn, { type: "toggleEnchant", stone: stone(1100) });
+      expect(next.equipped.top).toEqual(item(100));
+      expect(next.enchants.top).toEqual(stone(1100));
+    });
+
+    it("replaces the stone in a position rather than stacking", () => {
+      const first = reduce(initialState(db), { type: "toggleEnchant", stone: stone(1100) });
+      // 1300 is a Baixo stone, so it lands in its own position and both stay.
+      const both = reduce(first, { type: "toggleEnchant", stone: stone(1300) });
+      expect(both.enchants).toEqual({ top: stone(1100), low: stone(1300) });
+    });
+
+    it("toggles the same stone back off", () => {
+      const on = reduce(initialState(db), { type: "toggleEnchant", stone: stone(1100) });
+      expect(reduce(on, { type: "toggleEnchant", stone: stone(1100) }).enchants).toEqual({});
+    });
+
+    it("clears only the stone when the slot's stone is removed", () => {
+      let st = reduce(initialState(db), { type: "toggleEquip", item: item(100) });
+      st = reduce(st, { type: "toggleEnchant", stone: stone(1100) });
+      const next = reduce(st, { type: "unenchantSlot", slot: "top" });
+      expect(next.enchants.top).toBeUndefined();
+      expect(next.equipped.top).toEqual(item(100));
+    });
+
+    it("leaves the stone alone when the costume is unequipped", () => {
+      let st = reduce(initialState(db), { type: "toggleEquip", item: item(100) });
+      st = reduce(st, { type: "toggleEnchant", stone: stone(1100) });
+      const next = reduce(st, { type: "unequipSlot", slot: "top" });
+      expect(next.equipped.top).toBeUndefined();
+      expect(next.enchants.top).toEqual(stone(1100));
+    });
   });
 });

@@ -22,7 +22,8 @@ import { ClassSelect } from "./components/ClassSelect";
 import { InfoTip } from "./components/InfoTip";
 import { Preview } from "./components/Preview";
 import { SlotBar } from "./components/SlotBar";
-import { Slots } from "./components/Slots";
+import { Slots, type PickKind } from "./components/Slots";
+import type { KindFilter } from "./components/CatalogFilters";
 import { ThemeSelect } from "./components/ThemeSelect";
 import { Wishlist } from "./components/Wishlist";
 
@@ -110,9 +111,15 @@ function Simulator({ db }: { db: Db }) {
   // catalogue to it) and the catalogue chips. `pickSignal` bumps only on a slot
   // click so the catalogue can scroll back to the top then, not on chip changes.
   const [slotFilter, setSlotFilter] = useState<Slot | null>(null);
+  // Which of the two item kinds the catalogue is showing. Lifted here for the
+  // same reason the slot is: an empty row on a slot card jumps straight to the
+  // matching list — the costume line to that position's costumes, the stone line
+  // to its graphic stones.
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [pickSignal, setPickSignal] = useState(0);
-  const pickSlot = (slot: Slot) => {
+  const pickSlot = (slot: Slot, kind: PickKind) => {
     setSlotFilter(slot);
+    setKindFilter(kind === "stone" ? "stone" : "costume");
     setPickSignal((n) => n + 1);
   };
 
@@ -216,6 +223,8 @@ function Simulator({ db }: { db: Db }) {
           <Catalog
             slotFilter={slotFilter}
             onSlotFilterChange={setSlotFilter}
+            kindFilter={kindFilter}
+            onKindFilterChange={setKindFilter}
             pickSignal={pickSignal}
             keyboardEnabled={!playing}
           />

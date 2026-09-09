@@ -148,17 +148,36 @@ export const t = {
   slotClear: "Remover",
   slotFilterHint: (slot: string) => `Ver visuais de ${slot}`,
 
+  // Pedras Gráficas — the graphic-effect enchants that go inside a costume
+  // (browiki "Encantamento de Visual").
+  stoneLabel: "Pedra gráfica",
+  stoneEmpty: "Sem pedra",
+  stoneClear: "Remover pedra",
+  stoneFilterHint: (slot: string) => `Ver pedras gráficas de ${slot}`,
+  stoneNeedsCostume: "Encanta um visual: equipe um visual nesta posição para valer no jogo.",
+  stoneNoEffect:
+    "Sem prévia: este efeito é desenhado pelo próprio programa do jogo, não por um " +
+    "arquivo de efeito — não dá para mostrar aqui nem no mapa.",
+  stoneNoEffectShort: "sem prévia",
+  stoneFootprint: "Aparece no chão enquanto o personagem anda, na visão de mapa.",
+  stoneFootprintPending:
+    "Aparece no chão quando o personagem anda — mas o desenho ainda não foi extraído do jogo, " +
+    "então por enquanto não dá para mostrar.",
+  stoneFootprintShort: "pegada",
+
   catalogTitle: "Visuais",
   catalogInfoLabel: "Sobre os visuais disponíveis",
   catalogInfoText:
     "Visuais de efeito (auras, brilhos, climas e afins) não usam o sprite 2D do " +
     "personagem. Eles aparecem na lista, mas só são exibidos na visão de mapa, " +
-    "não na pré-visualização.",
+    "não na pré-visualização. O mesmo vale para as pedras gráficas, que são " +
+    "encantes colocados dentro de um visual e não substituem nada.",
   effectOnlyNote: "Só aparece no mapa",
   searchPlaceholder: "Buscar por nome ou ID…",
   allSlots: "Todos",
   itemCount: (n: number) => (n === 1 ? "1 item" : `${n} itens`),
   noResults: "Nenhum visual encontrado.",
+  stoneBadge: "Pedra",
   equippedBadge: "Equipado",
 
   filtersButton: "Filtros",
@@ -166,6 +185,14 @@ export const t = {
   filtersClear: "Limpar",
   filtersActive: (n: number) => `${n} filtro${n === 1 ? "" : "s"} ativo${n === 1 ? "" : "s"}`,
   slotFilterLabel: "Posição",
+  kindFilterLabel: "Tipo",
+  kindAll: "Todos",
+  kindCostumes: "Visuais",
+  kindStones: "Pedras gráficas",
+  kindAllTip: "Visuais e pedras gráficas juntos.",
+  kindCostumesTip: "Só os visuais — o que você veste em cada posição.",
+  kindStonesTip:
+    "Só as pedras gráficas: encantes de efeito que vão dentro de um visual, sem ocupar a posição.",
   singleSlotLabel: "Só visuais de uma posição",
   singleSlotTip:
     "Esconde os visuais que ocupam mais de uma posição ao mesmo tempo (um conjunto de Topo + Meio, por exemplo), que ao equipar tiram o que estiver nas outras.",

@@ -6,7 +6,7 @@
 // zrenderer encodes body direction AND animation type into one number:
 //     action = animationType * 8 + bodyDirection   (0=S, 1=SW … 7=SE)
 
-import { viewKindOf, type ClassInfo, type Costume, type Db, type Slot } from "./db";
+import { viewKindOf, type ClassInfo, type Costume, type Db, type Slot, type Stone } from "./db";
 import { mountsFor } from "./mounts";
 import { t } from "../i18n";
 import { APP_VERSION } from "../changelog";
@@ -127,6 +127,17 @@ export type State = {
   hairColor: number | null; // palette index; null = sprite's own palette
   clothesColor: number | null;
   equipped: Partial<Record<Slot, Costume>>;
+  /** Graphic-stone enchants ("Pedras Gráficas"), one per visual position. These
+   *  sit INSIDE the costume equipped in that position rather than replacing it,
+   *  which is why they are their own map: a build can have a Topo costume and a
+   *  Topo stone at once. Each stone is locked to the one position it goes in, so
+   *  the key is always the stone's own `slot`.
+   *
+   *  Nothing here reaches the 2D preview — a graphic stone is a ".str" world
+   *  effect (or a built-in client effect), which zrenderer cannot draw on a
+   *  body. The map simulator draws the ones ragassets ships a bundle for, the
+   *  same way it draws the effect-only costumes. */
+  enchants: Partial<Record<Slot, Stone>>;
   /** Alternative-outfit number for the class (ClassInfo.outfits[].n), or null for
    *  the normal body. Rendered as ragassets' `outfit=` param; the outfit has its
    *  own clothes palettes, so clothesColor is read against it (see palettesOf). */
@@ -161,6 +172,7 @@ export function initialState(db: Db): State {
     hairColor: null,
     clothesColor: null,
     equipped: {},
+    enchants: {},
     outfit: null,
     mount: null,
     pet: null,
@@ -180,6 +192,7 @@ export type Build = Pick<
   | "hairColor"
   | "clothesColor"
   | "equipped"
+  | "enchants"
   | "outfit"
   | "mount"
   | "pet"
@@ -194,6 +207,7 @@ export function buildOf(state: State): Build {
     hairColor: state.hairColor,
     clothesColor: state.clothesColor,
     equipped: state.equipped,
+    enchants: state.enchants,
     outfit: state.outfit,
     mount: state.mount,
     pet: state.pet,
@@ -213,6 +227,7 @@ export function applyBuild(state: State, build: Build): State {
     hairColor: build.hairColor,
     clothesColor: build.clothesColor,
     equipped: { ...build.equipped },
+    enchants: { ...build.enchants },
     outfit: build.outfit,
     mount: build.mount,
     pet: build.pet,
@@ -498,4 +513,16 @@ export function toggleEquip(state: State, item: Costume): void {
 export function unequipSlot(state: State, slot: Slot): void {
   const current = state.equipped[slot];
   if (current) for (const s of current.slots) delete state.equipped[s];
+}
+
+/** Enchant toggles, the stone counterpart of toggleEquip. A stone only ever goes
+ *  in its own position, so there is no overlap to clear — putting one in
+ *  replaces whatever stone was there, and re-picking the same one takes it off. */
+export function toggleEnchant(state: State, stone: Stone): void {
+  if (state.enchants[stone.slot]?.id === stone.id) delete state.enchants[stone.slot];
+  else state.enchants[stone.slot] = stone;
+}
+
+export function unenchantSlot(state: State, slot: Slot): void {
+  delete state.enchants[slot];
 }

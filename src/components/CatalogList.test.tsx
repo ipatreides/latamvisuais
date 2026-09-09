@@ -10,6 +10,7 @@ import type { Db, Slot } from "../core/db";
 import { makeDb } from "../test/fixtures";
 import { StateHarness } from "../test/StateHarness";
 import { Catalog } from "./Catalog";
+import type { KindFilter } from "./CatalogFilters";
 
 /** The component's fallback pitch: jsdom lays nothing out, so its measurement
  *  (the distance between two rows) can't run and the default stands. */
@@ -17,6 +18,9 @@ const PITCH = 64;
 const VIEWPORT = 320;
 const COUNT = 60;
 
+// Exactly COUNT rows, so the spacer arithmetic below has one number to check
+// against — hence no stones: this file is about the window, not the catalogue's
+// contents (Catalog.test covers those).
 const db: Db = {
   ...makeDb(),
   costumes: Array.from({ length: COUNT }, (_, i) => ({
@@ -25,14 +29,18 @@ const db: Db = {
     view: i,
     slots: ["top"] as Slot[],
   })),
+  stones: [],
 };
 
 function CatalogHost() {
   const [slotFilter, setSlotFilter] = useState<Slot | null>(null);
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   return (
     <Catalog
       slotFilter={slotFilter}
       onSlotFilterChange={setSlotFilter}
+      kindFilter={kindFilter}
+      onKindFilterChange={setKindFilter}
       pickSignal={0}
       keyboardEnabled
     />

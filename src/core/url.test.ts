@@ -21,6 +21,7 @@ function sampleState(): State {
       top: db.costumes.find((c) => c.id === 100)!,
       garment: db.costumes.find((c) => c.id === 400)!,
     },
+    enchants: {},
     outfit: null,
     mount: null,
     pet: null,
@@ -191,5 +192,40 @@ describe("syncUrl / readUrlState", () => {
 
   it("readUrlState returns null when there is no param", () => {
     expect(readUrlState(db)).toBeNull();
+  });
+});
+
+// Stones ride in the items field rather than a field of their own, so what has
+// to hold is that an id lands in the right layer on the way back out — and that
+// a link written before they existed still decodes.
+describe("graphic stones in the codec", () => {
+  const stone = (id: number) => db.stones.find((s) => s.id === id)!;
+
+  it("round-trips enchants alongside the equipped costumes", () => {
+    const state: State = {
+      ...sampleState(),
+      enchants: { top: stone(1100), low: stone(1300) },
+    };
+    const decoded = decodeState(encodeState(state), db)!;
+    expect(decoded.enchants).toEqual({ top: stone(1100), low: stone(1300) });
+    expect(decoded.equipped).toEqual(state.equipped);
+  });
+
+  it("costs nothing when no stone is picked", () => {
+    expect(encodeState(sampleState())).toBe(encodeState({ ...sampleState(), enchants: {} }));
+  });
+
+  it("reads a pre-stone link as having no enchants", () => {
+    // The same build, with the stone ids taken back out of the items field.
+    const withStones = encodeState({ ...sampleState(), enchants: { top: stone(1100) } });
+    const without = encodeState(sampleState());
+    expect(withStones).not.toBe(without);
+    expect(decodeState(without, db)!.enchants).toEqual({});
+  });
+
+  it("skips a stone id the db no longer has", () => {
+    const raw = encodeState({ ...sampleState(), enchants: { top: stone(1100) } });
+    const pruned = { ...db, stones: [] };
+    expect(decodeState(raw, pruned)!.enchants).toEqual({});
   });
 });

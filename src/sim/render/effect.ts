@@ -30,6 +30,7 @@ import {
 } from "three";
 import { UNITS_PER_PX } from "../sprite";
 import { type LoadedEffect, sampleLayer } from "../effect";
+import { tinted } from "./tint";
 
 // The effect's ground/feet reference. RO costume auras author their ground content
 // (the poring disc, the petal backdrop) at STR y≈240, so we anchor STR (320,240) at
@@ -53,8 +54,9 @@ const FRONT_BIAS = 2.0;
 /** STR-space bounding box of all the effect's drawn content. Each layer's type-0
  *  snapshots give absolute pos + quad corners; the bounding radius per snapshot
  *  (the farthest corner) covers the quad at any rotation. Segment ends are
- *  themselves snapshots, so velocity-grown quads are captured too. */
-function contentBounds(effect: LoadedEffect): { minX: number; minY: number; maxX: number; maxY: number } {
+ *  themselves snapshots, so velocity-grown quads are captured too. Exported for
+ *  the footprint decals, which size their canvas the same way. */
+export function contentBounds(effect: LoadedEffect): { minX: number; minY: number; maxX: number; maxY: number } {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const layer of effect.layers) {
     for (const a of layer.anims) {
@@ -95,7 +97,14 @@ export class EffectBillboard {
   private normDirty = false;
   private addDirty = false;
 
-  constructor(private scene: Scene, private effect: LoadedEffect) {
+  constructor(
+    private scene: Scene,
+    private effect: LoadedEffect,
+    /** World size per STR pixel. Defaults to the shared sprite scale, which is
+     *  what every aura is drawn at; the footprint puffs pass their own, because
+     *  the client sizes those from its own `Scale_Top` rather than from the art. */
+    private px: number = UNITS_PER_PX,
+  ) {
     const b = contentBounds(effect);
     let minX = b.minX - MARGIN;
     let minY = b.minY - MARGIN;
@@ -109,8 +118,8 @@ export class EffectBillboard {
     this.winMinY = minY;
     // The feet-anchor pixel's offset from the canvas centre, in world units —
     // fixed for the effect's lifetime, so precompute it once.
-    this.dx = (ANCHOR_X - minX - this.cw / 2) * UNITS_PER_PX;
-    this.dy = (this.ch / 2 - (ANCHOR_Y - minY)) * UNITS_PER_PX;
+    this.dx = (ANCHOR_X - minX - this.cw / 2) * this.px;
+    this.dy = (this.ch / 2 - (ANCHOR_Y - minY)) * this.px;
 
     this.normCtx = this.makeCanvas();
     this.addCtx = this.makeCanvas();
@@ -126,7 +135,7 @@ export class EffectBillboard {
     // the WHOLE quad toward the fog colour and adds it (src=ONE) even where the
     // texture is transparent, painting solid fog-coloured rectangles (e.g. the
     // blue boxes around iz_dun03's bubbles).
-    const geo = new PlaneGeometry(this.cw * UNITS_PER_PX, this.ch * UNITS_PER_PX);
+    const geo = new PlaneGeometry(this.cw * this.px, this.ch * this.px);
     this.normMesh = new Mesh(
       geo,
       new MeshBasicMaterial({ map: this.normTex, transparent: true, depthWrite: false, blending: NormalBlending, fog: false }),
@@ -165,7 +174,18 @@ export class EffectBillboard {
     const keyIndex = maxKey > 0 ? (timeSec * fps) % maxKey : 0;
 
     this.normCtx.clearRect(0, 0, this.cw, this.ch);
-    this.addCtx.clearRect(0, 0, this.cw, this.ch);
+    // The additive canvas starts OPAQUE BLACK, not cleared to transparent.
+    // `lighter` adds alpha as well as colour, so on a transparent canvas every
+    // quad accumulates its whole RECTANGLE into the alpha channel — the texture
+    // is opaque black-background art, so alpha 255 everywhere it is drawn. The
+    // canvas then uploads as a texture whose alpha is a set of hard-edged boxes,
+    // and the unpremultiply on upload turns those into the visible rectangular
+    // patches around an effect (reported on Camélia). Black is the identity for
+    // this plane's ONE/ONE blend, so a black ground costs nothing and keeps the
+    // alpha uniform.
+    this.addCtx.globalCompositeOperation = "source-over";
+    this.addCtx.fillStyle = "#000";
+    this.addCtx.fillRect(0, 0, this.cw, this.ch);
 
     let drewNorm = false;
     let drewAdd = false;
@@ -180,7 +200,7 @@ export class EffectBillboard {
       ctx.globalCompositeOperation = s.additive ? "lighter" : "source-over";
       ctx.translate(s.cx - this.winMinX, s.cy - this.winMinY);
       if (s.angle) ctx.rotate((-s.angle * Math.PI) / 180);
-      ctx.drawImage(tex, -s.w / 2, -s.h / 2, s.w, s.h);
+      ctx.drawImage(tinted(tex, s.tint[0], s.tint[1], s.tint[2]), -s.w / 2, -s.h / 2, s.w, s.h);
       ctx.restore();
       if (s.additive) drewAdd = true;
       else drewNorm = true;

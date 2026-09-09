@@ -24,6 +24,7 @@ describe("save slots", () => {
       hairStyle: 2,
       hairColor: 3,
       clothesColor: 2,
+      enchants: {},
       equipped: { top: item(100), garment: item(400) },
       outfit: null,
       mount: 1, // a saved mount must survive the round-trip

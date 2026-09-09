@@ -52,6 +52,10 @@ export interface LayerSample {
   h: number;
   angle: number; // degrees
   alpha: number; // 0..255
+  /** The layer's colour, which MULTIPLIES its texture (see render/tint.ts). Most
+   *  layers are neutral white; the tinted ones are how one grey sprite sheet
+   *  serves the red and the blue ki spirit. */
+  tint: [number, number, number];
   texture: HTMLImageElement | null;
   additive: boolean; // blend mode: additive glow vs straight alpha
 }
@@ -68,6 +72,8 @@ export async function loadEffect(key: string): Promise<LoadedEffect> {
   }));
   return { key: json.key, fps: json.fps, maxKey: json.maxKey, layers };
 }
+
+const clamp255 = (v: number): number => (v < 0 ? 0 : v > 255 ? 255 : v);
 
 /** STR keyframe drift: value = snapshot + per-frame velocity × elapsed frames. */
 function drift(snap: number, rate: number | undefined, dt: number): number {
@@ -89,6 +95,11 @@ export function sampleLayer(layer: EffectLayer, keyIndex: number): LayerSample |
 
   const alpha = drift(from.color[3], vel?.color[3], dt);
   if (alpha <= 0.5) return null;
+  const tint: [number, number, number] = [
+    clamp255(drift(from.color[0], vel?.color[0], dt)),
+    clamp255(drift(from.color[1], vel?.color[1], dt)),
+    clamp255(drift(from.color[2], vel?.color[2], dt)),
+  ];
 
   const px = drift(from.pos[0], vel?.pos[0], dt);
   const py = drift(from.pos[1], vel?.pos[1], dt);
@@ -115,6 +126,7 @@ export function sampleLayer(layer: EffectLayer, keyIndex: number): LayerSample |
     h,
     angle: drift(from.angle, vel?.angle, dt),
     alpha,
+    tint,
     texture: layer.textures[idx] ?? null,
     additive: from.dst !== 6, // 6 = INV_SRC_ALPHA (straight alpha); else additive
   };

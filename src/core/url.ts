@@ -14,7 +14,9 @@
 //       │  │         │        │            │            │              item ids, base36,
 //       │  │         │        │            │            │              "-"-joined (empty
 //       │  │         │        │            │            │              when nothing equipped
-//       │  │         │        │            │            │              but a pet follows)
+//       │  │         │        │            │            │              but a pet follows);
+//       │  │         │        │            │            │              graphic-stone ids
+//       │  │         │        │            │            │              ride here too
 //       │  │         │        │            │            └ 0 = padrão, else index+1 (base36)
 //       │  │         │        │            └ same encoding as clothes color
 //       │  │         │        └ hair style number, base36
@@ -34,6 +36,14 @@
 // as "0" when there is no pet, since the decoder already reads a pet of 0 as
 // "none". A tone preset needs no extra field at all, so the common case costs
 // nothing.
+//
+// Graphic stones share the items field rather than taking a tenth one. Item ids
+// are unique across the whole client table, so an id decodes unambiguously to
+// either a costume or a stone, and the decoder simply routes each one to the
+// layer it belongs to. That keeps every existing link valid (no version bump),
+// costs nothing when no stone is picked, and spares the codec a fourth
+// positional trailing field — which would have had to emit a placeholder skin
+// colour to reach it.
 //
 // Worst case ≈ 25 chars, alphabet [0-9a-z.-] only — never percent-encoded.
 // The decoder is forgiving: malformed fields keep their defaults, unknown item
@@ -82,6 +92,12 @@ export function encodeState(state: State): string {
       seen.add(item.id);
       items.push(item.id);
     }
+  }
+  // Stones trail the costumes in the same field; each is pinned to one slot, so
+  // there is nothing to dedupe between them.
+  for (const slot of SLOTS) {
+    const stone = state.enchants[slot];
+    if (stone) items.push(stone.id);
   }
   const fields = [
     VERSION,
@@ -154,13 +170,22 @@ export function decodeState(raw: string | null, db: Db): Partial<State> | null {
 
   if (f[6]) {
     const byId = new Map(db.costumes.map((c) => [c.id, c]));
+    const stoneById = new Map(db.stones.map((s) => [s.id, s]));
     const equipped: State["equipped"] = {};
+    const enchants: State["enchants"] = {};
     for (const part of f[6].split("-")) {
       const id = parse36(part);
-      const item = id != null ? byId.get(id) : undefined;
-      if (item) equipInto(equipped, item);
+      if (id == null) continue;
+      const item = byId.get(id);
+      if (item) {
+        equipInto(equipped, item);
+        continue;
+      }
+      const stone = stoneById.get(id);
+      if (stone) enchants[stone.slot] = stone;
     }
     out.equipped = equipped;
+    out.enchants = enchants;
   }
 
   // Pet is the 8th field. Present (even if invalid → no pet); absent on older

@@ -4,10 +4,10 @@
 // head-framed thumbnail once; if that also fails, give up and mark the image so
 // the CSS can show a placeholder.
 
-import type { Costume } from "../core/db";
+import type { Costume, Stone } from "../core/db";
 import { costumeThumbUrl, itemIconUrl } from "../core/state";
 
-export function CostumeIcon({ item, className }: { item: Costume; className: string }) {
+export function CostumeIcon({ item, className }: { item: Costume | Stone; className: string }) {
   return (
     <img
       className={className}

@@ -10,7 +10,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { buildClasses, buildCostumes, buildHair, slotsFromDesc, titleFromJt } from "./sync-db.mjs";
+import {
+  buildClasses,
+  buildCostumes,
+  buildHair,
+  buildStones,
+  slotsFromDesc,
+  titleFromJt,
+} from "./sync-db.mjs";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fixture = (name) => JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), "utf8"));
@@ -195,5 +202,118 @@ describe("buildCostumes", () => {
   it("emits fields in the order verify-previews writes them back", () => {
     expect(Object.keys(byId[5105])).toEqual(["id", "name", "slots", "view"]);
     expect(Object.keys(byId[480177])).toEqual(["id", "name", "slots", "view", "viewKind"]);
+  });
+});
+
+describe("buildStones", () => {
+  const rawItems = fixture("items");
+  const stones = buildStones(rawItems);
+  const byId = Object.fromEntries(stones.map((s) => [s.id, s]));
+
+  it("reads the position out of the item's own name", () => {
+    expect(stones.map((s) => [s.id, s.slot])).toEqual([
+      [25058, "top"], // Pedra Gráfica: Cintilação (Topo)
+      [25137, "low"], // Pedra Gráfica: Aura Verde (Baixo)
+      [25138, "mid"], // Pedra Gráfica: Miniatura (Meio)
+      [25225, "mid"], // Pedra Gráfica: Raios Vermelhos (Meio)
+      [1001907, "garment"], // Pedra de Pegada: Bolinhos (Capa)
+      [1002194, "mid"], // Gráfico: Espírito de Influência (Meio)
+      [1002239, "garment"], // Pegadas do Banguela (Capa)
+    ]);
+  });
+
+  // Neither signal covers the set on its own — this is what the union buys.
+  it("takes stones the name prefix marks and stones only the description marks", () => {
+    // Miniatura's description words its effect without the "/effect" note, so
+    // only "Pedra Gráfica:" identifies it.
+    expect(byId[25138]).toBeDefined();
+    // These two carry no stone prefix at all; the description is all there is.
+    expect(byId[1002194]).toBeDefined(); // "…desligado com /effect"
+    expect(byId[1002239]).toBeDefined(); // "…para aplicar este efeito"
+  });
+
+  it("leaves the stat enchant stones alone", () => {
+    // Same "(Topo)" suffix, same Loja Fashion line — ~200 of these ship, and
+    // none of them is a visual effect.
+    expect(byId[6636]).toBeUndefined(); // Pedra de FOR (Topo)
+  });
+
+  it("ignores the enchant a stone turns into", () => {
+    // "Gráfico: Fantasmas" is what ends up inside the costume once the stone is
+    // used. It has the effect note but no position, so it is not a pickable item
+    // — the stone's own id is the one people buy and the one we list.
+    expect(byId[29040]).toBeUndefined();
+  });
+
+  it("carries the effect key through when ragassets has one", () => {
+    const withEffect = buildStones(rawItems, new Map([[25058, "efst_glitter"]]));
+    expect(withEffect.find((s) => s.id === 25058).effect).toBe("efst_glitter");
+    // No entry means no key at all, rather than an empty one the app would have
+    // to special-case.
+    expect(withEffect.find((s) => s.id === 25138)).not.toHaveProperty("effect");
+  });
+
+  it("keeps stones out of the costume catalogue", () => {
+    expect(buildCostumes(rawItems).some((i) => i.id === 25058)).toBe(false);
+  });
+});
+
+describe("buildStones — footprints", () => {
+  const rawItems = fixture("items");
+  // 1001907 is the fixture's "Pedra de Pegada: Bolinhos (Capa)".
+  const trail = {
+    bottomLeft: "paw_l",
+    bottomRight: "paw_r",
+    scaleBottom: 1,
+    scaleTop: 1,
+    heightTop: 0,
+    stride: 30,
+    gap: 10,
+    adjustAngle: true,
+  };
+
+  it("flags a footprint even when there is nothing to draw yet", () => {
+    // The flag alone is worth carrying: it is what lets the app say "appears
+    // when you walk" rather than "nothing can ever draw this".
+    const stones = buildStones(rawItems, new Map(), new Map([[1001907, { steps: null }]]));
+    const stone = stones.find((s) => s.id === 1001907);
+    expect(stone.footprint).toBe(true);
+    expect(stone).not.toHaveProperty("steps");
+  });
+
+  it("carries the trail through when ragassets has bundled it", () => {
+    const stones = buildStones(rawItems, new Map(), new Map([[1001907, { steps: trail }]]));
+    const stone = stones.find((s) => s.id === 1001907);
+    expect(stone.footprint).toBe(true);
+    expect(stone.steps).toEqual(trail);
+  });
+
+  it("leaves the stones that aren't footprints alone", () => {
+    const stones = buildStones(rawItems, new Map(), new Map([[1001907, { steps: trail }]]));
+    expect(stones.find((s) => s.id === 25058)).not.toHaveProperty("footprint");
+  });
+});
+
+describe("buildStones — built-in effects", () => {
+  const rawItems = fixture("items");
+  const stones = buildStones(rawItems);
+
+  it("carries the client's own effect parameters for the stones that have none in the GRF", () => {
+    // 25225 Raios Vermelhos: HatEffectInfo gives it EF 1130, which the client's
+    // effect table plays as an attached .spr. Sourced, not inferred from the
+    // item text — see BUILTIN_EFFECT.
+    const stone = stones.find((s) => s.id === 25225);
+    expect(stone.builtin).toEqual({
+      kind: "sprite",
+      key: "eff_1130",
+      head: true,
+      yOffset: -50,
+    });
+  });
+
+  it("leaves the builtins that no source describes alone", () => {
+    // Aura Verde (EF 680) is in neither the client's Lua nor roBrowser's table.
+    // A plausible guess here would be worse than the honest gap.
+    expect(stones.find((s) => s.id === 25137)).not.toHaveProperty("builtin");
   });
 });

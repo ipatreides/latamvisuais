@@ -15,12 +15,11 @@
 // which it has to do arithmetically because the target row may not be mounted.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from "react";
-import type { Costume } from "../core/db";
+import { canPreview, type Costume, type Stone } from "../core/db";
 import { divinePrideUrl, marketItemUrl } from "../core/links";
 import { CHUNK, formatZeny, type PriceState } from "../core/market";
 import { useRowPrices } from "../hooks/useRowPrices";
 import { t } from "../i18n";
-import { useAppState } from "../state/AppStateContext";
 import { CostumeIcon } from "./CostumeIcon";
 import { Cart } from "./icons";
 
@@ -32,16 +31,19 @@ const ROW_PITCH = 64;
 
 type Props = {
   /** The filtered items in display order — the window indexes this. */
-  items: Costume[];
+  items: (Costume | Stone)[];
   /** Id of the row the arrow keys move from, or null before anything is picked. */
   cursorId: number | null;
-  onPick: (item: Costume, el: HTMLElement) => void;
+  /** Whether an item is on the character. Costumes and graphic stones sit in
+   *  different layers of the build, so the answer comes from the catalogue
+   *  rather than being re-derived per row here. */
+  isOn: (item: Costume | Stone) => boolean;
+  onPick: (item: Costume | Stone, el: HTMLElement) => void;
   /** Bumps when a slot card opened the catalogue: scroll back to the top. */
   pickSignal: number;
 };
 
-export function CatalogList({ items, cursorId, onPick, pickSignal }: Props) {
-  const state = useAppState();
+export function CatalogList({ items, cursorId, isOn, onPick, pickSignal }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef(0);
   // The window's own coordinates, not the scroller's: `scrollTop` changes every
@@ -173,7 +175,7 @@ export function CatalogList({ items, cursorId, onPick, pickSignal }: Props) {
             which collapsed the whole scroll extent. */}
         <div style={{ height: start * pitch, flexShrink: 0 }} aria-hidden="true" />
         {items.slice(start, end).map((item) => {
-          const equipped = item.slots.every((s) => state.equipped[s]?.id === item.id);
+          const equipped = isOn(item);
           const price: PriceState = priceOf(item.id);
           return (
             <div
@@ -210,7 +212,12 @@ export function CatalogList({ items, cursorId, onPick, pickSignal }: Props) {
                   >
                     {`#${item.id}`}
                   </a>
-                  {` · ${item.slots.map((s) => t.slotNames[s]).join(" + ")}`}
+                  {/* A stone's client name already ends in "(Topo)", so
+                      repeating the position would say it twice — what the row
+                      still has to say is that it is a stone at all. */}
+                  {"stone" in item
+                    ? ` · ${t.stoneLabel}${stoneNote(item)}`
+                    : ` · ${item.slots.map((s) => t.slotNames[s]).join(" + ")}`}
                 </span>
                 <span className="catalog-row-price">{priceLine(price)}</span>
               </span>
@@ -253,4 +260,13 @@ function priceLine(state: PriceState): string {
   if (price.offers) return t.priceFrom(formatZeny(price.offers.min), price.offers.stores);
   if (price.market) return t.priceAvg(formatZeny(price.market.avg), price.market.totalSold);
   return price.inMarket ? t.priceNoOffers : t.priceNeverSeen;
+}
+
+/** The trailing note on a stone's row: what kind it is when that changes how it
+ *  shows up, and whether there is anything to show at all. */
+function stoneNote(stone: Stone): string {
+  const parts = [];
+  if (stone.footprint) parts.push(t.stoneFootprintShort);
+  if (!canPreview(stone)) parts.push(t.stoneNoEffectShort);
+  return parts.length ? ` · ${parts.join(" · ")}` : "";
 }

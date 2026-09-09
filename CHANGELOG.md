@@ -4,6 +4,235 @@ All notable changes to this project are documented here. The format is loosely
 based on [Keep a Changelog](https://keepachangelog.com/); versioning is informal
 while pre-1.0.
 
+## [0.14.0] — 2026-09-02
+
+Graphic stones ("Pedras Gráficas") — the visual-enchant stones from Malangdo's
+Loja Fashion — as a first-class item kind, with their own layer in the build.
+
+### Added
+
+- **`public/db/stones.json`** (29 stones), written by `tools/sync-db.mjs`'s new
+  `buildStones`. A stone is not a costume: it carries no `equipSlots`, no view
+  and no `costume` flag, and it never occupies a visual slot — it is the enchant
+  that goes *inside* the costume already in that position, so it gets its own
+  file and its own state layer rather than joining `costumes.json`.
+
+  Each stone is locked to one position, and the **client writes that position
+  into the item's own name** ("Pedra Gráfica: Cintilação (Topo)") — the only
+  place it appears anywhere in the tables. Detection is the union of two signals,
+  because neither covers the set alone:
+
+  | signal | misses |
+  | --- | --- |
+  | `Pedra Gráfica:` / `Pedra de Pegada:` name prefix | `1002194 Gráfico: Espírito de Influência (Meio)`, `1002239 Pegadas do Banguela (Capa)`, `1002240 Pulinhos do Banguela (Capa)` |
+  | description's graphic-effect note (`…desligado com /effect`, `…para aplicar este efeito`) | `25138`/`25205 Miniatura`, `1002642 Operação Ave de Fogo` |
+
+  Their union is exactly the set bROWiki lists, plus the second **Miniatura**
+  (it ships one stone for Meio and one for Baixo). Distribution: 4 Topo,
+  14 Meio, 5 Baixo, 6 Capa — every Capa one is a footprint ("Pegada"). The
+  **stone's** id is emitted, not the `Gráfico: X` enchant it becomes: the stone
+  is the tradeable item, so the market and Divine-Pride links resolve.
+
+- **`State.enchants: Partial<Record<Slot, Stone>>`** — the new layer, part of
+  `Build`, so it saves to a character slot and travels in `?b=` like everything
+  else. `toggleEnchant` / `unenchantSlot` mirror the costume pair and never touch
+  `equipped`: enchanting a position leaves the costume in it alone, and clearing
+  either one leaves the other.
+
+- **The wishlist lists the stones too**, each right after the costume it goes
+  inside rather than grouped at the end — they're bought together, and a stone is
+  worth nothing without a visual to enchant. Same Divine-Pride and market links
+  as any other row; the ids resolve because `stones.json` carries the *stone's*
+  id, which is the tradeable item.
+
+- **A "Tipo" filter group** (Todos / Visuais / Pedras gráficas), and a stone line
+  on each of the four slot cards. An empty stone line opens the catalogue on that
+  position's stones (`onPick(slot, "stone")`); a stone with no costume under it
+  is flagged, since that build can't exist in game.
+
+- `loadFootprints` reads `/effects/footprints.json` — the bundle keys and
+  placement numbers per footprint — and `buildStones` merges them onto the stone
+  as `steps`. **Being listed there at all** sets `footprint: true`, whether or not
+  the row names any bundles — ragassets can know a stone IS a footprint well
+  before it has artwork for it, and those two states have to read differently:
+  "appears when you walk" is waiting on work, an effect compiled into the client
+  is not. So a row with no `bottomLeft` is a meaningful row, not a broken one.
+  Optional and non-fatal, like the stone effects. ragassets shipped it on
+  2026-09-08 and **all six footprints have a trail**, so 18 of the 29 stones now
+  draw in the map view.
+
+- `loadStoneEffects` reads `/effects/stones.json` — `{ items: [{ id, effect }] }`,
+  the same shape and directory as the effect-costume index — and merges the key
+  into each stone. Only ragassets can know it (the link runs stone → the client's
+  hat-effect table → a `.str` under `data/texture/effect/`), and unlike
+  `loadEffectIds` a miss is **not fatal**: the stones still ship, without a
+  preview.
+
+  ragassets shipped it on 2026-09-06 and **12 of the 29 resolve**: Cintilação
+  (`ljosalfar`), Fantasmas (`c_ghost_effect`), Poça d'Água (`waterfield2`), Luz
+  Angelical, Relógios (`time_accessory`), Corações (`magical_feather`), Popstar
+  (`valhalla_idol`), Camélia (`flowersmoke`), Rosas Românticas, Dragão Alado
+  (`resonatetaego`) and the two Espíritos (`ros_bluespirit`/`ros_redspirit`).
+  Note how little the effect names give away — `magical_feather` draws hearts and
+  `ljosalfar` draws sparkles; ragassets confirmed those by eye against the
+  textures, and the item id is the only thing this side keys on either way.
+
+- `sim/Simulator.tsx` reads `enchants[slot].effect` alongside
+  `equipped[slot].effect`, so a stone draws in the map view by the same path an
+  effect-only costume does, the moment its bundle exists.
+
+### Changed
+
+- **The `?b=` codec gained no field.** Stone ids ride in the existing items list;
+  item ids are unique across the client table, so the decoder routes each id to
+  the layer that claims it. No version bump, every existing link still decodes,
+  and a stone costs nothing when none is picked — which also spared the codec a
+  fourth positional trailing field that would have had to emit a placeholder skin
+  colour to be reachable.
+- `CatalogList` takes `isOn` from the catalogue instead of reading `equipped`
+  itself, since "on the character" now means two different things.
+
+### Notes
+
+- **The 2D preview will never show these.** A graphic stone is a `.str` world
+  effect or a built-in client effect; zrenderer draws neither on a body. The map
+  simulator is the only place they can appear — the same rule the effect-only
+  costumes already live under.
+- **The footprint trail** — `sim/footsteps.ts` + `sim/render/footprint.ts`. The
+  six "Pegadas" aren't one effect stuck to the character like an aura: the client
+  stamps a decal at each footstep and leaves it behind to play out, which is a
+  different renderer, not a missing bundle key.
+
+  `FootstepEmitter` owns the placement and has no three.js in it, so it is
+  testable without any assets: it turns the walker's position stream into prints
+  a `stride` apart, alternating feet `gap` either side of the walk line, carrying
+  the leftover distance across frames so the spacing doesn't change with the
+  frame rate, and re-anchoring instead of paving a line across the map when the
+  character teleports. `FootprintDecal` draws one — the same `.str` compositing
+  as `EffectBillboard`, but lying flat in the ground plane (yawed to the heading
+  when the client says `IsAdjustAngle`), played once rather than looped, anchored
+  on the effect's own origin pixel. `FootprintTrail` owns their lifetimes, caps
+  the live count, and hangs the optional `top` effect above each print as an
+  ordinary camera-facing billboard.
+
+  `stride`, `gap` and `heightTop` are read as **`.str` pixels** — ragassets
+  confirmed that is the unit, and that they are *not* multiplied by `scale*`,
+  which only normalises art authored at different sizes. All six take the
+  client's default `stride: 50`, `gap: 2`.
+
+  How many pixels a GAT cell is worth is still this renderer's choice, and the
+  two answers disagree: `UNITS_PER_PX` (5/175, the scale every other `.str` here
+  is drawn at) makes it ~35 px/cell, so a stride of 50 lands prints ~1.43 cells
+  apart; ragassets measured the client's own ground art — `sanctuary` at 5×5
+  cells, `magnus` at 7×7 — and got ~128 px/cell. We keep `UNITS_PER_PX`, because
+  it is what the auras are already drawn at and moving it would shrink every
+  existing effect to match. It is one line in `Simulator.tsx`.
+
+  **A footprint's SIZE, though, does not come from its artwork at all**
+  (`SCALE_UNITS` in `sim/render/footprint.ts`). Reading `Scale_Bottom` as a
+  multiplier on the `.str`'s own geometry — the obvious reading, and the one the
+  first cut used — draws a dumpling print at a sixth of a cell: a speck, where
+  the game draws something about as wide as the character. The client's own
+  numbers say as much, defaulting to `0.05` and never coming near 1. So the scale
+  sizes the decal in the world directly and the art contributes only its aspect
+  ratio, calibrated at **40 cells for `Scale` 1** against the official
+  "Selecionáveis do Banguela II" sheet. The arithmetic, so it can be rechecked:
+  `0.06 × 40 = 2.4` world units, and a GAT cell is 2 world units, so the Banguela
+  mark draws ~1.2 cells wide against a 1.14-cell character and overlaps slightly
+  along its 1.43-cell stride — which is what the sheet shows. (An earlier draft of
+  this entry said 20; that was the first value tried and it read far too small.)
+
+  `Scale_Top` had a plainer bug: it wasn't passed to the puff at all, so the puff
+  fell back to the aura scale and drew ~4.8 cells tall over a mark a fraction of
+  a cell wide — a pink streak beside a speck. `EffectBillboard` now takes an
+  optional world-units-per-pixel (defaulting to `UNITS_PER_PX`, so the auras are
+  untouched) and the trail passes each half its own.
+
+- **Every `.str` layer now draws in its own colour** (`sim/render/tint.ts`). An
+  STR keyframe carries an RGBA where only the alpha was being read; the RGB
+  multiplies the layer's texture, and it is how one grey sprite sheet serves
+  several effects. About a sixth of the keyframes across the served bundles carry
+  a real tint, so this was not a footprint problem — `ros_redspirit` is
+  `(255,0,0)` over the same art `ros_bluespirit` tints `(0,128,255)`, and Camélia
+  is a white puff tinted magenta. All of them were drawing untinted.
+
+  It surfaced as a **white disc** under the Banguela footprints: that mark is a
+  white 128×128 texture the client tints `(157,240,55)`, Toothless' plasma green.
+  Tinting is cached per texture and quantised to 16 levels a channel (the value
+  drifts continuously between keyframes, so caching the exact one would mint a
+  canvas per frame), with a fast path for the neutral-white majority.
+
+- **Additive effect layers no longer paint rectangles.** Their canvas starts
+  opaque black instead of cleared to transparent. `lighter` adds *alpha* as well
+  as colour, and this art is opaque black-background, so every quad accumulated
+  its whole rectangle into the alpha channel: the canvas uploaded as a texture
+  whose alpha was a set of hard-edged boxes, which the unpremultiply on upload
+  turned into the visible patches around Camélia's smoke. Black is the identity
+  for that plane's ONE/ONE blend, so a black ground costs nothing and keeps the
+  alpha uniform. Isolating the effect's own canvas — its RGB over black beside
+  its alpha channel — is what showed it: the colour was right all along and the
+  alpha was rectangles.
+
+- **Three of the client-drawn stones now render** (`BUILTIN_EFFECT` in
+  `tools/sync-db.mjs`), from parameters rather than from a description. These are
+  the rows whose `HatEffectInfo` entry gives a `hatEffectID` — an `EF_` id into
+  the client's built-in effect table — instead of a `resourceFileName`, so there
+  is no file for ragassets to extract:
+
+  | stone | EF | parameters |
+  | --- | --- | --- |
+  | Miniatura (×2) | 421 | `FUNC`, entity `xSize`/`ySize` = 2.5 against a default of 5 — exactly half |
+  | Raios Vermelhos | 1130 | `SPR bakuretsu_hadou`, attached, repeating, `head`, `yOffset -50` |
+  | Espaço Digital | 1240 | `SPR digital_space`, attached, repeating, `renderBeforeEntities` |
+
+  Two sources, both checkable: the EF id per stone comes from the **client's own
+  Lua tables** (HatEffectIDs + HatEffectInfo loaded into shared globals), and what
+  that id does comes from **roBrowser's port of the client's effect table** — the
+  same provenance as every binary-format parser in this repo. The `.spr` bundles
+  were already being served at `/effects/sprites/eff_<id>/`, and knowing the id is
+  what made them addressable, so no upstream change was needed. Straight alpha,
+  not additive: those frames carry a real alpha channel (84% / 44% transparent),
+  so they are cut-out art.
+
+  `Character` gained `setScale` (scaling the feet anchor with it, so a shrunken
+  character still stands on the ground) and `headOffset`, which measures the
+  topmost opaque row of the current frame — cached per frame image, since
+  `getImageData` is a sync readback and a tall hat moves the head.
+
+  **The other six stay preview-less on purpose.** Aura Verde (680), Aura Azul
+  (1122), Sombra (1004), Bolha Rosa (396), Palidez (1131) are in neither source,
+  and 254 carries only a sound. (It is listed there as `EF_STEELBODY` while our
+  client calls the slot `HAT_EF_Electric` — not a contradiction: `HAT_EF_*` names
+  the hat-effect wrapper, `EF_*` names the effect it points at, and they are
+  different naming layers. The ids themselves are append-only and stable. The
+  entry is simply empty of anything renderable.) Their item descriptions do say
+  roughly what they look like; that is not a specification, and a plausible
+  invention is worse than an honest gap. Ground truth for these needs a frame
+  capture (RenderDoc/apitrace) against the running client — `Ragexe.exe` itself is
+  Themida-packed, so static decompilation is not an option.
+
+- **`canPreview`** (`core/db.ts`) is now the single answer to "will anything be
+  drawn for this stone". Three call sites had each spelled the condition out and
+  they had already drifted — the slot card kept saying "sem prévia" for a stone
+  it was about to draw.
+
+- **The 17 without a preview are three different problems**, per ragassets'
+  report: 10 are built-in effects whose `HatEffectInfo.lub` row carries a
+  `hatEffectID` instead of a `resourceFileName`, so no asset exists (Miniatura,
+  Palidez, Sombra, Aura Azul/Verde, …); 6 are footprints, which the client stamps
+  as a decal per footstep out of two `.str` plus placement and so can't be one
+  bundle key; and Ventania declares `HAT_EF_Golden_Aura_TW` and is then given no
+  row in any table and no `.str`. The slot card dims its map glyph for all of
+  them, and the list row says "sem prévia".
+- Two of the built-in ten — **Raios Vermelhos** and **Espaço Digital** — name a
+  played *sprite* that ragassets already bundles at `/effects/sprites/eff_<id>/`.
+  **Superseded within this release** — see the built-in effects entry above: the
+  effect id turned out to be readable from the client's own Lua, which made those
+  bundles addressable without any upstream change, and both now draw.
+- Most stones share **one** item icon in the client (the blue-crystal art,
+  `블루크리스탈조각`), so the icon-only grid can't tell them apart — the name in the
+  tooltip and the list view are what distinguish them, exactly as in the game.
+
 ## [0.13.2] — 2026-09-01
 
 Routine `public/db` re-sync against ragassets. `classes.json` and `hair.json`

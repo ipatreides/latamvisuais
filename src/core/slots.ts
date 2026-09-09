@@ -45,6 +45,7 @@ function decodeBuild(raw: string, db: Db): Build {
     hairColor: p.hairColor !== undefined ? p.hairColor : def.hairColor,
     clothesColor: p.clothesColor !== undefined ? p.clothesColor : def.clothesColor,
     equipped: p.equipped ?? def.equipped,
+    enchants: p.enchants ?? def.enchants,
     outfit: p.outfit !== undefined ? p.outfit : def.outfit,
     mount: p.mount !== undefined ? p.mount : def.mount,
     pet: p.pet !== undefined ? p.pet : def.pet,
@@ -96,6 +97,7 @@ export function saveSlots(store: SlotStore): void {
  *  fires when the costume changes but not when only the pose/rotation does. */
 export function buildSignature(build: Build): string {
   const items = SLOTS.map((s) => build.equipped[s]?.id ?? "").join(",");
+  const stones = SLOTS.map((s) => build.enchants[s]?.id ?? "").join(",");
   return [
     build.classId,
     build.gender,
@@ -107,5 +109,6 @@ export function buildSignature(build: Build): string {
     build.pet,
     build.skin,
     items,
+    stones,
   ].join("|");
 }

@@ -18,10 +18,20 @@ which publishes the client's data tables as JSON:
 `tools/sync-db.mjs` reshapes those three into the files the app actually loads.
 Base URL: `https://assets.latam-tools.com.br/raw`.
 
+It also reads two files that sit *next to* `/raw`, not inside it:
+`/effects/index.json` (the effect-only costumes — see the gotcha below) and
+`/effects/stones.json`, which says which effect bundle draws each graphic stone,
+and `/effects/footprints.json`, which does the same for the six "Pegadas" (two
+bundles plus the client's placement numbers, since those are stamped per footstep
+rather than played on the body).
+Both are **optional**: a stone with no entry still ships, just with no preview. 12 of the 29 have one today — the other 17 are built-in client effects,
+footprints, or (Ventania) an effect the client declares and never defines, and no
+amount of extraction will give them a bundle.
+
 ## The command order — do not reorder
 
 ```sh
-npm run sync:db                  # 1. rebuild public/db/{classes,hair,costumes}.json
+npm run sync:db                  # 1. rebuild public/db/{classes,hair,costumes,stones}.json
 node tools/verify-previews.mjs   # 2. prune costumes that render blank
 git diff --stat public/db        # 3. read the diff before committing
 ```
@@ -116,6 +126,18 @@ carries robe view 100, so it used to land in both lists and show up twice in the
 picker. If the effects index is unreachable the sync fails loudly rather than
 shipping a catalogue with duplicates.
 
+**Graphic stones are read out of item NAMES.** `stones.json` covers the 29
+"Pedras Gráficas" — the enchants that go *inside* a costume rather than in a
+slot. They carry no `equipSlots`, no view and no `costume` flag, so the only
+statement of which position each one goes in is the suffix on its own name
+("Pedra Gráfica: Cintilação (Topo)"). Telling them apart from the ~200 STAT
+enchant stones that share that suffix takes two signals — the
+"Pedra Gráfica:"/"Pedra de Pegada:" prefix *and* the description's
+graphic-effect note — because neither covers the whole set (see `buildStones`).
+If a game update renames them, the count drops silently: check the
+`stones.json — N graphic stones` line the sync prints, and expect 29 until
+Gravity ships a new one.
+
 **`npm run sync:db -- --input …`** — the `--` matters, otherwise npm eats the
 flag.
 
@@ -125,6 +147,8 @@ flag.
 whole story. Expect it to be small: a handful of new costumes and the occasional
 renamed item. Sanity checks before committing:
 
+- `stones.json` should be **unchanged** on a routine patch; a shrinking item
+  count there means a renamed stone slipped past `buildStones`.
 - `classes.json` and `hair.json` should be **unchanged** unless the update
   actually touched classes, palettes or hair — a diff there on a routine item
   patch means something upstream moved, so look at it.

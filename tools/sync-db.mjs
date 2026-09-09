@@ -327,6 +327,99 @@ export function buildCostumes(rawItems, effectIds = new Set()) {
   return out.sort((a, b) => a.id - b.id);
 }
 
+// ---------------------------------------------------------------------------
+// stones.json — the "Pedras Gráficas": the graphic-effect enchants the Loja
+// Fashion in Malangdo puts INSIDE a costume (browiki "Encantamento de Visual").
+//
+// They are not costumes and never occupy a visual slot themselves — a character
+// wears a Topo costume *and* has a Topo graphic stone enchanted into it — so
+// they get their own file rather than joining costumes.json, and their own
+// layer in the app's build state.
+//
+// Every stone is locked to ONE visual position, and the client writes that
+// position into the item's own name: "Pedra Gráfica: Cintilação (Topo)". That
+// suffix is the only place the slot appears — these items carry no equipSlots,
+// no view and no costume flag — so it is what the slot is read from.
+//
+// Telling a graphic stone apart from the ~200 STAT enchant stones that share the
+// suffix ("Pedra de FOR (Topo)") takes two signals, because neither covers the
+// whole set on its own:
+//   - the "Pedra Gráfica:" / "Pedra de Pegada:" name prefix — which the three
+//     oddly-named rows lack ("Gráfico: Espírito de Influência (Meio)",
+//     "Pegadas do Banguela (Capa)", "Pulinhos do Banguela (Capa)"), and
+//   - the description's graphic-effect note ("pode ser desligado com /effect",
+//     or "para aplicar este efeito") — which Miniatura and Operação Ave de Fogo
+//     word differently and so miss.
+// Their union is exactly the 29 stones the wiki lists (Miniatura ships two, one
+// per slot); either signal alone loses rows.
+//
+// The stone's own item id is what's emitted — that's the tradeable item people
+// look up on the market, not the "Gráfico: X" enchant it turns into.
+// ---------------------------------------------------------------------------
+
+// Stones the client draws from its OWN code, not from a ".str" — their
+// HatEffectInfo row carries a `hatEffectID` (an `EF_` id) instead of a
+// `resourceFileName`, so ragassets has no file to extract and never will.
+//
+// Two sources, both checkable, neither of them an item description:
+//   1. the EF id per stone, read out of the client's own Lua tables
+//      (HatEffectIDs + HatEffectInfo, loaded into shared globals);
+//   2. what that id does, from roBrowser's port of the client's effect table —
+//      the same provenance as every binary-format parser this project uses.
+//
+//   25138/25205 Miniatura        EF 421  FUNC, entity.xSize/ySize = 2.5 (default
+//                                        5), i.e. exactly half size
+//   25225 Raios Vermelhos        EF 1130 SPR bakuretsu_hadou, head, yOffset -50
+//   1002585 Espaço Digital       EF 1240 SPR digital_space, renderBeforeEntities
+//
+// The other builtins — Aura Verde (680), Aura Azul (1122), Sombra (1004), Bolha
+// Rosa (396), Palidez (1131), Raios Azuis (254) — are in NEITHER source, so they
+// stay preview-less. Do not fill them in from what the item text says they look
+// like: the descriptions do not pin down an appearance, and a plausible guess is
+// worse than an honest gap.
+export const BUILTIN_EFFECT = {
+  25138: { kind: "scale", scale: 0.5 },
+  25205: { kind: "scale", scale: 0.5 },
+  25225: { kind: "sprite", key: "eff_1130", head: true, yOffset: -50 },
+  1002585: { kind: "sprite", key: "eff_1240", behind: true },
+};
+
+const STONE_SLOT = { topo: "top", meio: "mid", baixo: "low", capa: "garment" };
+const STONE_SUFFIX = /\((Topo|Meio|Baixo|Capa)\)\s*$/i;
+const STONE_PREFIX = /^Pedra (Gr[áa]fica|de Pegada)\s*:/i;
+const STONE_NOTE = /(desligado|desativado) com \/effect|para aplicar este efeito/i;
+
+/** `effects` maps a stone id to the ragassets effect-bundle key that draws it
+ *  (see loadStoneEffects). A stone with no entry ships without one and is marked
+ *  in the UI as having no preview — the same treatment an effect costume gets
+ *  before its bundle exists. */
+export function buildStones(rawItems, effects = new Map(), footprints = new Map()) {
+  const out = [];
+  for (const it of rawItems) {
+    const name = it.name ?? "";
+    const m = name.match(STONE_SUFFIX);
+    if (!m) continue;
+    if (!STONE_PREFIX.test(name) && !STONE_NOTE.test(it.description ?? "")) continue;
+    const stone = { id: it.id, name, slot: STONE_SLOT[m[1].toLowerCase()] };
+    const effect = effects.get(it.id);
+    if (effect) stone.effect = effect;
+    // The "Pegadas": drawn per footstep rather than as one effect on the body.
+    // The flag and the placement data come separately on purpose — ragassets can
+    // know a stone IS a footprint well before it has bundles for it, and the two
+    // states read differently in the UI ("appears when you walk" vs "nothing can
+    // draw this").
+    const fp = footprints.get(it.id);
+    if (fp) {
+      stone.footprint = true;
+      if (fp.steps) stone.steps = fp.steps;
+    }
+    const builtin = BUILTIN_EFFECT[it.id];
+    if (builtin) stone.builtin = builtin;
+    out.push(stone);
+  }
+  return out.sort((a, b) => a.id - b.id);
+}
+
 // The description's structured type line, for entries missing the `costume`
 // flag. Regular equipment reports its real slot type here ("Tipo: Cabeça"), so
 // this matches only genuine visual items. Colour codes (^RRGGBB) are stripped
@@ -346,17 +439,25 @@ async function main(argv) {
   const outDir = resolve(args.out ?? DEFAULT_OUT);
   mkdirSync(outDir, { recursive: true });
 
-  const [rawClasses, rawHair, rawItems, effectIds] = await Promise.all([
+  const [rawClasses, rawHair, rawItems, effectIds, stoneEffects, footprints] = await Promise.all([
     ...["classes", "hair", "items"].map((n) => loadTable(n, args)),
     loadEffectIds(args),
+    loadStoneEffects(args),
+    loadFootprints(args),
   ]);
 
   const classes = buildClasses(rawClasses, CLASS_CATALOG);
   const hair = buildHair(rawHair);
   const costumes = buildCostumes(rawItems, effectIds);
+  const stones = buildStones(rawItems, stoneEffects, footprints);
 
   // Compact JSON (no pretty-print) keeps the bundled files small.
-  for (const [name, doc] of [["classes", { classes }], ["hair", hair], ["costumes", { items: costumes }]]) {
+  for (const [name, doc] of [
+    ["classes", { classes }],
+    ["hair", hair],
+    ["costumes", { items: costumes }],
+    ["stones", { items: stones }],
+  ]) {
     writeFileSync(join(outDir, `${name}.json`), JSON.stringify(doc));
   }
 
@@ -367,6 +468,13 @@ async function main(argv) {
   console.log(`  classes.json  — ${classes.length} classes`);
   console.log(`  hair.json     — ${styleCounts} styles`);
   console.log(`  costumes.json — ${costumes.length} costumes (before verify-previews)`);
+  const feet = stones.filter((s) => s.footprint);
+  console.log(
+    `  stones.json   — ${stones.length} graphic stones ` +
+      `(${stones.filter((s) => s.effect).length} with an effect bundle, ` +
+      `${feet.filter((s) => s.steps).length}/${feet.length} footprints with a trail, ` +
+      `${stones.filter((s) => s.builtin).length} from the client's own effect table)`,
+  );
   console.log("\nNow run: node tools/verify-previews.mjs");
 }
 
@@ -434,6 +542,96 @@ export async function loadEffectIds(args) {
     doc = await res.json();
   }
   return new Set((doc.items ?? []).map((i) => i.id));
+}
+
+// Which ragassets effect bundle draws each graphic stone, from
+// /effects/stones.json — the same directory (and the same shape) as the
+// effect-costume index next to it: `{ items: [{ id, effect }] }`.
+//
+// Only ragassets can know this: the link runs from the stone through the
+// client's hat-effect table to a ".str" under data/texture/effect/, none of
+// which is in the item table this repo reads. So it is optional here and, unlike
+// loadEffectIds, a miss is NOT fatal — the stones still ship, just without an
+// effect key, and the app says they have no preview. (loadEffectIds must fail
+// loud because a missing index puts costumes in the catalogue twice; missing
+// stone effects only cost the map preview.)
+export async function loadStoneEffects(args) {
+  const at = args.input
+    ? join(resolve(args.input), "..", "effects", "stones.json")
+    : new URL("../effects/stones.json", `${args.url ?? `${RAGASSETS_BASE}/raw`}/`).href;
+  let doc;
+  try {
+    if (args.input) {
+      if (!existsSync(at)) throw new Error(`not found: ${at}`);
+      console.log(`Reading ${at}`);
+      doc = JSON.parse(readFileSync(at, "utf8"));
+    } else {
+      console.log(`Fetching ${at}`);
+      const res = await fetch(at);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      doc = await res.json();
+    }
+  } catch (err) {
+    console.warn(`  ! no stone effects (${err.message}) — stones ship without a preview`);
+    return new Map();
+  }
+  return new Map((doc.items ?? []).filter((i) => i.effect).map((i) => [i.id, i.effect]));
+}
+
+// The footprint stones: which of them the client draws per footstep, and — once
+// ragassets has bundled the .str — how. Read from /effects/footprints.json, a
+// sibling of the two indexes above:
+//   { items: [{ id, bottomLeft, bottomRight, topLeft, topRight,
+//               scaleBottom, scaleTop, heightTop, stride, gap, adjustAngle }] }
+//
+// Optional and non-fatal for the same reason as loadStoneEffects: without it the
+// footprints still ship, they just have no trail to draw. A row with no
+// `bottomLeft` still marks the stone as a footprint — that alone is worth having,
+// because "appears when you walk, not extracted yet" and "an effect compiled into
+// the client that nothing can ever draw" look identical downstream otherwise, and
+// the app says something different for each.
+export async function loadFootprints(args) {
+  const at = args.input
+    ? join(resolve(args.input), "..", "effects", "footprints.json")
+    : new URL("../effects/footprints.json", `${args.url ?? `${RAGASSETS_BASE}/raw`}/`).href;
+  let doc;
+  try {
+    if (args.input) {
+      if (!existsSync(at)) throw new Error(`not found: ${at}`);
+      console.log(`Reading ${at}`);
+      doc = JSON.parse(readFileSync(at, "utf8"));
+    } else {
+      console.log(`Fetching ${at}`);
+      const res = await fetch(at);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      doc = await res.json();
+    }
+  } catch (err) {
+    console.warn(`  ! no footprints (${err.message}) — the Pegadas ship without a trail`);
+    return new Map();
+  }
+  return new Map((doc.items ?? []).map((i) => [i.id, { steps: i.bottomLeft ? stepsOf(i) : null }]));
+}
+
+/** The render half of a footprints.json row, without the id. Listed field by
+ *  field rather than spread, so a stray key upstream can't silently widen what
+ *  ends up committed in public/db. */
+function stepsOf(i) {
+  const steps = {
+    bottomLeft: i.bottomLeft,
+    bottomRight: i.bottomRight ?? i.bottomLeft,
+    scaleBottom: i.scaleBottom ?? 1,
+    scaleTop: i.scaleTop ?? 1,
+    heightTop: i.heightTop ?? 0,
+    stride: i.stride ?? 0,
+    gap: i.gap ?? 0,
+    adjustAngle: !!i.adjustAngle,
+  };
+  // A footprint without a top half is normal — leave the keys out rather than
+  // shipping empty strings the renderer would have to test for.
+  if (i.topLeft) steps.topLeft = i.topLeft;
+  if (i.topRight ?? i.topLeft) steps.topRight = i.topRight ?? i.topLeft;
+  return steps;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

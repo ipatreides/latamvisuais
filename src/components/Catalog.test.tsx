@@ -5,15 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Slot } from "../core/db";
 import { StateHarness } from "../test/StateHarness";
 import { Catalog } from "./Catalog";
+import type { KindFilter } from "./CatalogFilters";
 
 // The catalogue's slot filter is owned by App; this host mirrors that wiring so
 // the chips and the equip toggling behave as they do in the real tree.
 function CatalogHost({ keyboardEnabled = true }: { keyboardEnabled?: boolean }) {
   const [slotFilter, setSlotFilter] = useState<Slot | null>(null);
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   return (
     <Catalog
       slotFilter={slotFilter}
       onSlotFilterChange={setSlotFilter}
+      kindFilter={kindFilter}
+      onKindFilterChange={setKindFilter}
       pickSignal={0}
       keyboardEnabled={keyboardEnabled}
     />
@@ -201,8 +205,10 @@ describe("Catalog", () => {
       await user.keyboard("{ArrowUp}{ArrowUp}");
       expect(cursor()).toBe("Chapéu A (#100)");
 
-      await user.keyboard("{ArrowDown>8/}");
-      expect(cursor()).toBe("Baixo com Sprite de Capa (#800)");
+      // Past the end of the list, which runs the costumes first and then the
+      // stones — so this also shows the keyboard walks into them.
+      await user.keyboard("{ArrowDown>20/}");
+      expect(cursor()).toBe("Pedra de Pegada: Bolhas (Capa) (#1500)");
     });
 
     // The regression a plain toggleEquip would cause: stepping onto something
@@ -405,5 +411,84 @@ describe("Catalog", () => {
     unmount();
     renderCatalog();
     expect(screen.getByRole("button", { name: "Lista" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  // Graphic stones share the grid with the costumes but land in a different
+  // layer of the build (core/state.ts), so what matters here is that picking one
+  // adds to what's on rather than replacing it.
+  describe("graphic stones", () => {
+    const kindChip = (name: string) =>
+      within(screen.getByRole("group", { name: "Tipo" })).getByRole("button", { name });
+
+    /** The view preference is cached in a module (see core/prefs.ts), so it
+     *  outlives the localStorage reset between tests — an earlier test that
+     *  switched to the list would otherwise decide what these render into.
+     *  These assert on tiles, so they say which view they want. */
+    async function renderGrid(user: ReturnType<typeof userEvent.setup>) {
+      renderCatalog();
+      await user.click(screen.getByRole("button", { name: "Grade" }));
+    }
+
+    it("lists stones next to the costumes by default", async () => {
+      await renderGrid(userEvent.setup());
+      expect(tile("Pedra Gráfica: Brilho (Topo) (#1100)")).toBeVisible();
+      expect(tile("Chapéu A (#100)")).toBeVisible();
+    });
+
+    it("marks the stone tiles apart from the costume ones", async () => {
+      await renderGrid(userEvent.setup());
+      expect(tile("Pedra Gráfica: Brilho (Topo) (#1100)")).toHaveClass("is-stone");
+      expect(tile("Chapéu A (#100)")).not.toHaveClass("is-stone");
+    });
+
+    it("narrows to one kind or the other", async () => {
+      const user = userEvent.setup();
+      await renderGrid(user);
+      await openFilters(user);
+
+      await user.click(kindChip("Pedras gráficas"));
+      expect(tile("Pedra Gráfica: Brilho (Topo) (#1100)")).toBeVisible();
+      expect(tile("Chapéu A (#100)")).not.toBeVisible();
+
+      await user.click(kindChip("Visuais"));
+      expect(tile("Chapéu A (#100)")).toBeVisible();
+      expect(tile("Pedra Gráfica: Brilho (Topo) (#1100)")).not.toBeVisible();
+    });
+
+    it("combines with the position chips", async () => {
+      const user = userEvent.setup();
+      await renderGrid(user);
+      await openFilters(user);
+
+      await user.click(kindChip("Pedras gráficas"));
+      await user.click(
+        within(screen.getByRole("group", { name: "Posição" })).getByRole("button", { name: "Topo" }),
+      );
+      expect(tile("Pedra Gráfica: Brilho (Topo) (#1100)")).toBeVisible();
+      expect(tile("Pedra Gráfica: Névoa (Meio) (#1200)")).not.toBeVisible();
+    });
+
+    it("enchants the position instead of taking the costume off it", async () => {
+      const user = userEvent.setup();
+      await renderGrid(user);
+
+      await user.click(tile("Chapéu A (#100)"));
+      await user.click(tile("Pedra Gráfica: Brilho (Topo) (#1100)"));
+
+      // Both are on: the hat in the Topo slot, the stone inside it.
+      expect(tile("Chapéu A (#100)")).toHaveClass("is-equipped");
+      expect(tile("Pedra Gráfica: Brilho (Topo) (#1100)")).toHaveClass("is-equipped");
+    });
+
+    it("swaps the stone in a position and toggles the same one off", async () => {
+      const user = userEvent.setup();
+      await renderGrid(user);
+
+      await user.click(tile("Pedra Gráfica: Brilho (Topo) (#1100)"));
+      expect(tile("Pedra Gráfica: Brilho (Topo) (#1100)")).toHaveClass("is-equipped");
+
+      await user.click(tile("Pedra Gráfica: Brilho (Topo) (#1100)"));
+      expect(tile("Pedra Gráfica: Brilho (Topo) (#1100)")).not.toHaveClass("is-equipped");
+    });
   });
 });

@@ -5,9 +5,19 @@
 // e.g. switching to a non-head-rotating pose resets headDir, and a class change
 // can fix an out-of-range hair/clothes color.
 
-import type { Costume, Db, Slot } from "./db";
+import type { Costume, Db, Slot, Stone } from "./db";
 import { clampState } from "./clamp";
-import { applyBuild, equipInto, toggleEquip, unequipSlot, type Build, type Gender, type State } from "./state";
+import {
+  applyBuild,
+  equipInto,
+  toggleEnchant,
+  toggleEquip,
+  unenchantSlot,
+  unequipSlot,
+  type Build,
+  type Gender,
+  type State,
+} from "./state";
 
 export type Action =
   | { type: "setClass"; classId: number }
@@ -25,6 +35,8 @@ export type Action =
   | { type: "toggleEquip"; item: Costume }
   | { type: "equip"; item: Costume }
   | { type: "unequipSlot"; slot: Slot }
+  | { type: "toggleEnchant"; stone: Stone }
+  | { type: "unenchantSlot"; slot: Slot }
   | { type: "loadBuild"; build: Build };
 
 function reduceRaw(state: State, action: Action): State {
@@ -72,6 +84,18 @@ function reduceRaw(state: State, action: Action): State {
     case "unequipSlot": {
       const next: State = { ...state, equipped: { ...state.equipped } };
       unequipSlot(next, action.slot);
+      return next;
+    }
+    // Graphic stones are their own layer: enchanting one leaves the costume in
+    // that position alone, which is what the game does.
+    case "toggleEnchant": {
+      const next: State = { ...state, enchants: { ...state.enchants } };
+      toggleEnchant(next, action.stone);
+      return next;
+    }
+    case "unenchantSlot": {
+      const next: State = { ...state, enchants: { ...state.enchants } };
+      unenchantSlot(next, action.slot);
       return next;
     }
     case "loadBuild":

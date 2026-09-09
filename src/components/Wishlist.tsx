@@ -1,9 +1,10 @@
 // Wishlist modal — a shopping list for the current build. Lists the equipped
-// costumes with their icon, id and name; the name links to the item's
-// Divine-Pride page, and a cart button opens the item on our own market. A
-// server picker (Freya/Nidhogg) is shared with the catalogue's market filters
-// and remembered between sessions. The modal renders into <body> (a portal) so
-// its fixed overlay isn't clipped by the catalogue panel.
+// costumes and the graphic stones enchanted into them, with their icon, id and
+// name; the name links to the item's Divine-Pride page, and a cart button opens
+// the item on our own market. A server picker (Freya/Nidhogg) is shared with the
+// catalogue's market filters and remembered between sessions. The modal renders
+// into <body> (a portal) so its fixed overlay isn't clipped by the catalogue
+// panel.
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -17,7 +18,7 @@ import { Cart } from "./icons";
 import { ServerSelect } from "./ServerSelect";
 
 // A wishlist line only needs an item id (icon + links) and a name (display) —
-// satisfied by both costumes and the pet egg.
+// satisfied by costumes, graphic stones and the pet egg alike.
 type WishItem = { id: number; name: string };
 
 export function Wishlist() {
@@ -26,18 +27,24 @@ export function Wishlist() {
 
   // Distinct equipped costumes (a multi-slot piece is listed once), plus the
   // selected pet's egg (its own item) so the list doubles as a shopping list.
+  //
+  // A position's graphic stone follows the costume it goes inside, rather than
+  // the stones being grouped at the end: they're bought together, and the stone
+  // is only worth anything with a visual to enchant.
   const items: WishItem[] = [];
   const seen = new Set<number>();
+  const push = (it?: { id: number; name: string }) => {
+    if (!it || seen.has(it.id)) return;
+    seen.add(it.id);
+    items.push({ id: it.id, name: it.name });
+  };
   for (const slot of SLOTS) {
-    const it = state.equipped[slot];
-    if (it && !seen.has(it.id)) {
-      seen.add(it.id);
-      items.push({ id: it.id, name: it.name });
-    }
+    push(state.equipped[slot]);
+    push(state.enchants[slot]);
   }
   if (state.pet != null) {
     const pet = PETS.find((p) => p.mob === state.pet);
-    if (pet) items.push({ id: pet.egg, name: pet.eggName });
+    if (pet) push({ id: pet.egg, name: pet.eggName });
   }
 
   useEffect(() => {

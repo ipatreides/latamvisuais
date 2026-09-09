@@ -27,6 +27,18 @@ const MARKET_CHIPS = [
 
 export type MarketFilter = (typeof MARKET_CHIPS)[number]["key"];
 
+/** Costumes and graphic stones share the grid, so the first thing the panel
+ *  offers is which of the two you're looking at. "Todos" is the default: the 29
+ *  stones don't crowd 1500 costumes, and mixing them is how anyone finds out
+ *  they exist. */
+const KIND_CHIPS = [
+  { key: "all", label: t.kindAll, tip: t.kindAllTip },
+  { key: "costume", label: t.kindCostumes, tip: t.kindCostumesTip },
+  { key: "stone", label: t.kindStones, tip: t.kindStonesTip },
+] as const;
+
+export type KindFilter = (typeof KIND_CHIPS)[number]["key"];
+
 /** Static, so the panel isn't rebuilding it on every catalogue render. */
 const SLOT_CHIPS = [
   { key: "all" as const, label: t.allSlots },
@@ -69,6 +81,8 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   slotFilter: Slot | null;
   onSlotFilterChange: (slot: Slot | null) => void;
+  kindFilter: KindFilter;
+  onKindFilterChange: (kind: KindFilter) => void;
   marketFilter: MarketFilter;
   onMarketFilterChange: (filter: MarketFilter) => void;
   /** Hide costumes that take more than one slot at a time. */
@@ -81,6 +95,8 @@ export function CatalogFilters({
   onOpenChange,
   slotFilter,
   onSlotFilterChange,
+  kindFilter,
+  onKindFilterChange,
   marketFilter,
   onMarketFilterChange,
   singleSlotOnly,
@@ -128,7 +144,10 @@ export function CatalogFilters({
   }, [open, onOpenChange]);
 
   const active =
-    (slotFilter ? 1 : 0) + (marketFilter === "all" ? 0 : 1) + (singleSlotOnly ? 1 : 0);
+    (slotFilter ? 1 : 0) +
+    (kindFilter === "all" ? 0 : 1) +
+    (marketFilter === "all" ? 0 : 1) +
+    (singleSlotOnly ? 1 : 0);
 
   return (
     <div className="catalog-filter-menu" ref={rootRef}>
@@ -159,6 +178,21 @@ export function CatalogFilters({
             ref={popRef}
             style={place ?? undefined}
           >
+            <div className="catalog-filter-group">
+              <div className="catalog-filter-label">{t.kindFilterLabel}</div>
+              <div className="catalog-filters" role="group" aria-label={t.kindFilterLabel}>
+                {KIND_CHIPS.map(({ key, label, tip }) => (
+                  <Chip
+                    key={key}
+                    label={label}
+                    tip={tip}
+                    active={key === kindFilter}
+                    onClick={() => onKindFilterChange(key)}
+                  />
+                ))}
+              </div>
+            </div>
+
             <div className="catalog-filter-group">
               <div className="catalog-filter-label">{t.slotFilterLabel}</div>
               {/* Both chip rows start with a "Todos" — the group name is what
@@ -215,6 +249,7 @@ export function CatalogFilters({
               disabled={active === 0}
               onClick={() => {
                 onSlotFilterChange(null);
+                onKindFilterChange("all");
                 onMarketFilterChange("all");
                 onSingleSlotOnlyChange(false);
               }}

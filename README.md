@@ -122,6 +122,23 @@ The three files it rewrites:
   them is this repo's choice (`CLASS_CATALOG`), as are the pinned 4th-job pt-BR
   names (`NAME_OVERRIDE`); everything else comes from ragassets.
 - `hair.json` — hair styles per gender/race, and the hair-color swatches.
+- `stones.json` — the **Pedras Gráficas**: the graphic-effect enchants the Loja
+  Fashion in Malangdo puts *inside* a costume. They are not costumes and never
+  take a visual slot — a character wears a Topo costume **and** has a Topo stone
+  enchanted into it — so the app keeps them in their own build layer, with a
+  line of their own on each slot card. Every stone is locked to one position,
+  and the client writes that position into the item's own name ("Pedra Gráfica:
+  Cintilação (Topo)"), which is where `sync:db` reads it from. Like the effect
+  costumes, their effect is a `.str` the character renderer can't draw, so they
+  show up in the catalogue and in the map view but never in the 2D preview —
+  and only for the 22 of 29 we have something to draw. Those 22 come three ways:
+  12 from an extracted `.str` bundle, 6 "Pegadas" stamped on the ground per
+  footstep rather than played on the body (`sim/footsteps.ts`,
+  `sim/render/footprint.ts`), and 4 the client draws from its own built-in effect
+  table, reproduced from published parameters. Note the last group: **being a
+  built-in effect does not mean it has no preview** — it means there is no file
+  to extract, which is only fatal when no published source describes it either.
+  That is the case for the remaining 7.
 
 ### Dropping effect-only costumes
 

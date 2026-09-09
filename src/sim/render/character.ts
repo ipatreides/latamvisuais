@@ -45,6 +45,18 @@ export class Character {
   private toCam = new Vector3();
   private metrics: SpriteMetrics;
   private anchorOffset: number;
+  /** Uniform size factor — 1 normally; the Miniatura graphic stone halves it
+   *  (the client's EF 421 sets the entity's xSize/ySize to 2.5 against a default
+   *  of 5). Scaling the mesh alone would leave the feet anchor where it was, so
+   *  `update` scales the anchor offset with it and the character stays on the
+   *  ground. */
+  private sizeScale = 1;
+  /** Where the drawn sprite's TOP edge sits above the feet, in world units, for
+   *  whatever frame is on screen — what a head-anchored effect attaches to.
+   *  Measured from the sprite's own opaque pixels rather than assumed, and cached
+   *  per frame image, since a tall hat moves it. */
+  private topByFrame = new Map<string, number>();
+  private topOffset = 0;
 
   constructor(
     private scene: Scene,
@@ -82,16 +94,59 @@ export class Character {
       this.ctx.clearRect(0, 0, this.metrics.w, this.metrics.h);
       this.ctx.drawImage(img, 0, 0, this.metrics.w, this.metrics.h);
       this.texture.needsUpdate = true;
+      this.topOffset = this.measureTop(img.src);
     }
     // Face the camera fully (image-plane-aligned): a single-depth flat sprite.
     this.mesh.quaternion.copy(camera.quaternion);
     // Offset along the billboard's up axis so the feet anchor lands on the ground.
     this.up.set(0, 1, 0).applyQuaternion(camera.quaternion);
-    this.mesh.position.copy(feet).addScaledVector(this.up, this.anchorOffset);
+    this.mesh.position.copy(feet).addScaledVector(this.up, this.anchorOffset * this.sizeScale);
     // Pull toward the camera along the line of sight so nearby ground can't clip
     // the lower edge (depth-only nudge; the on-screen position is unchanged).
     this.toCam.copy(camera.position).sub(this.mesh.position).normalize();
     this.mesh.position.addScaledVector(this.toCam, FRONT_BIAS);
+  }
+
+  /** Resize the character uniformly (1 = normal). Cheap enough to call every
+   *  frame: it only writes the mesh scale when the value actually changes. */
+  setScale(scale: number): void {
+    if (scale === this.sizeScale) return;
+    this.sizeScale = scale;
+    this.mesh.scale.setScalar(scale);
+  }
+
+  /** World-up distance from the feet to the top of the drawn sprite, for the
+   *  current frame and current size — where a head-anchored effect goes. */
+  headOffset(): number {
+    return this.topOffset * this.sizeScale;
+  }
+
+  /** The topmost opaque row of a frame, as a world-up offset from the feet.
+   *  Read once per distinct frame image and cached: `getImageData` is a sync
+   *  readback, far too slow to run every frame, but a given frame's silhouette
+   *  never changes. */
+  private measureTop(key: string): number {
+    const hit = this.topByFrame.get(key);
+    if (hit !== undefined) return hit;
+    const { w, h, anchorY } = this.metrics;
+    let row = anchorY;
+    try {
+      const data = this.ctx.getImageData(0, 0, w, h).data;
+      for (let y = 0; y < anchorY; y++) {
+        let any = false;
+        for (let x = 0; x < w; x++) {
+          if (data[(y * w + x) * 4 + 3] > 8) { any = true; break; }
+        }
+        if (any) { row = y; break; }
+      }
+    } catch {
+      // Tainted or unreadable canvas — fall back to the feet, so a head-anchored
+      // effect sits low rather than the frame throwing.
+      row = anchorY;
+    }
+    const offset = (anchorY - row) * UNITS_PER_PX;
+    this.topByFrame.set(key, offset);
+    return offset;
   }
 
   /** Show/hide the billboard — used to keep the previous map's character from

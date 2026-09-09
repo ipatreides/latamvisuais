@@ -7,6 +7,7 @@ import { Wishlist } from "./Wishlist";
 
 const db = makeDb();
 const item = (id: number) => db.costumes.find((c) => c.id === id)!;
+const stone = (id: number) => db.stones.find((s) => s.id === id)!;
 
 function renderWishlist() {
   return render(
@@ -74,5 +75,35 @@ describe("Wishlist", () => {
     await user.selectOptions(screen.getByRole("combobox"), "NIDHOGG");
     expect(localStorage.getItem("latamvisuais.server")).toBe("NIDHOGG");
     expect(screen.getByRole("combobox")).toHaveValue("NIDHOGG");
+  });
+
+  // A stone is bought like anything else on the list, so it belongs on it —
+  // and next to the costume it goes inside, not at the end.
+  it("lists an enchanted graphic stone under the costume it goes in", async () => {
+    const user = userEvent.setup();
+    render(
+      <StateHarness
+        db={db}
+        init={{
+          equipped: { top: item(100), garment: item(400) },
+          enchants: { top: stone(1100) },
+        }}
+      >
+        <Wishlist />
+      </StateHarness>,
+    );
+    expect(screen.getByText("(3)")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Lista de desejos/ }));
+    const names = screen.getAllByRole("link", { name: /Chapéu A|Capa D|Pedra Gráfica/ });
+    expect(names.map((n) => n.textContent)).toEqual([
+      "Chapéu A",
+      "Pedra Gráfica: Brilho (Topo)",
+      "Capa D",
+    ]);
+    expect(screen.getByRole("link", { name: "Pedra Gráfica: Brilho (Topo)" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/database/item/1100/"),
+    );
   });
 });

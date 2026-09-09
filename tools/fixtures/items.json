@@ -1,194 +1,320 @@
 [
-  {
-    "id": 501,
-    "name": "Poção Vermelha",
-    "slots": 0,
-    "aegisName": null,
-    "resourceName": "빨간포션",
-    "description": "",
-    "view": 0,
-    "spriteView": 0,
-    "viewKind": null,
-    "equipSlots": [],
-    "costume": false
-  },
-  {
-    "id": 5105,
-    "name": "2º Aniversário",
-    "slots": 0,
-    "aegisName": null,
-    "resourceName": "케이크모자",
-    "description": "Tipo: ^777777Equip. para Cabeça^000000\nEquipa em: ^777777Topo^000000",
-    "view": 109,
-    "spriteView": 109,
-    "viewKind": "headgear",
-    "equipSlots": [
-      "top"
-    ],
-    "costume": true
-  },
-  {
-    "id": 5979,
-    "name": "[Visual] Penas Encantadas",
-    "slots": 0,
-    "aegisName": "C_Angel_Fluttering",
-    "resourceName": "C흩날리는천사의날개",
-    "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Baixo^000000",
-    "view": 0,
-    "spriteView": 0,
-    "viewKind": null,
-    "equipSlots": [
-      "low"
-    ],
-    "costume": true
-  },
-  {
-    "id": 5981,
-    "name": null,
-    "slots": 0,
-    "aegisName": null,
-    "resourceName": "사타닉체인",
-    "description": "",
-    "view": 382,
-    "spriteView": 382,
-    "viewKind": "headgear",
-    "equipSlots": [],
-    "costume": true
-  },
-  {
-    "id": 15280,
-    "name": "Malha Sombria do Ataque Crítico",
-    "slots": 0,
-    "aegisName": "S_CriticalHit_Armor",
-    "resourceName": "아머쉐도우3",
-    "description": "Tipo: ^777777Equip. Sombrio^000000\nPosição: ^777777Armadura^000000",
-    "view": 0,
-    "spriteView": 0,
-    "viewKind": null,
-    "equipSlots": [],
-    "costume": true
-  },
-  {
-    "id": 19424,
-    "name": "[Visual] Crânio de Esqueleão",
-    "slots": 0,
-    "aegisName": "C_Master_Cat",
-    "resourceName": "Master_Cat",
-    "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Meio e Baixo^000000",
-    "view": 1806,
-    "spriteView": 1806,
-    "viewKind": "headgear",
-    "equipSlots": [
-      "mid",
-      "low"
-    ],
-    "costume": true
-  },
-  {
-    "id": 19920,
-    "name": "Máscara de Sussurro Assustador",
-    "slots": 0,
-    "aegisName": null,
-    "resourceName": "진화된위스퍼마스크",
-    "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Topo, Meio e Baixo^000000",
-    "view": 0,
-    "spriteView": 458,
-    "viewKind": "headgear",
-    "equipSlots": [
-      "top",
-      "mid",
-      "low"
-    ],
-    "costume": false
-  },
-  {
-    "id": 20330,
-    "name": "[Visual] Chapéu de Solita",
-    "slots": 0,
-    "aegisName": "C_Sombrero",
-    "resourceName": "솜브레로",
-    "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Topo^000000",
-    "view": 0,
-    "spriteView": 151,
-    "viewKind": "headgear",
-    "equipSlots": [
-      "top"
-    ],
-    "costume": false
-  },
-  {
-    "id": 31379,
-    "name": "Gira-Cocuruto",
-    "slots": 0,
-    "aegisName": "C_Drama_Clockwork",
-    "resourceName": "연극용태엽키",
-    "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Topo^000000",
-    "view": 1335,
-    "spriteView": 1335,
-    "viewKind": "headgear",
-    "equipSlots": [
-      "top"
-    ],
-    "costume": true
-  },
-  {
-    "id": 480097,
-    "name": "[Visual] Aura Nevada",
-    "slots": 0,
-    "aegisName": "C_Snow_Powder",
-    "resourceName": "C_Snow_Powder",
-    "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Capa^000000",
-    "view": 0,
-    "spriteView": 100,
-    "spriteBlank": false,
-    "viewKind": "garment",
-    "equipSlots": [
-      "garment"
-    ],
-    "costume": true
-  },
-  {
-    "id": 480177,
-    "name": "Buquê Gigantesco",
-    "slots": 0,
-    "aegisName": "C_Clutch_Bouquet",
-    "resourceName": "C_Clutch_Bouquet",
-    "description": "Tipo: ^777777Visual ^000000\nEquipa em: ^777777Baixo^000000",
-    "view": 128,
-    "spriteView": 128,
-    "viewKind": "garment",
-    "equipSlots": [
-      "low"
-    ],
-    "costume": true
-  },
-  {
-    "id": 480237,
-    "name": null,
-    "slots": 0,
-    "aegisName": "C_Katana_TenguMaster",
-    "resourceName": "C_Katana_TenguMaster",
-    "description": "",
-    "view": 158,
-    "spriteView": 158,
-    "spriteBlank": false,
-    "viewKind": "garment",
-    "equipSlots": [],
-    "costume": true
-  },
-  {
-    "id": 480807,
-    "name": "[Visual] Escudo Petulante",
-    "slots": 0,
-    "aegisName": "C_Cynic_Guard_CP",
-    "resourceName": "C_Cynic_Guard",
-    "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Capa^000000",
-    "view": 2828,
-    "spriteView": 2828,
-    "viewKind": "headgear",
-    "equipSlots": [
-      "garment"
-    ],
-    "costume": true
-  }
+ {
+  "id": 501,
+  "name": "Poção Vermelha",
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "빨간포션",
+  "description": "",
+  "view": 0,
+  "spriteView": 0,
+  "viewKind": null,
+  "equipSlots": [],
+  "costume": false
+ },
+ {
+  "id": 5105,
+  "name": "2º Aniversário",
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "케이크모자",
+  "description": "Tipo: ^777777Equip. para Cabeça^000000\nEquipa em: ^777777Topo^000000",
+  "view": 109,
+  "spriteView": 109,
+  "viewKind": "headgear",
+  "equipSlots": [
+   "top"
+  ],
+  "costume": true
+ },
+ {
+  "id": 5979,
+  "name": "[Visual] Penas Encantadas",
+  "slots": 0,
+  "aegisName": "C_Angel_Fluttering",
+  "resourceName": "C흩날리는천사의날개",
+  "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Baixo^000000",
+  "view": 0,
+  "spriteView": 0,
+  "viewKind": null,
+  "equipSlots": [
+   "low"
+  ],
+  "costume": true
+ },
+ {
+  "id": 5981,
+  "name": null,
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "사타닉체인",
+  "description": "",
+  "view": 382,
+  "spriteView": 382,
+  "viewKind": "headgear",
+  "equipSlots": [],
+  "costume": true
+ },
+ {
+  "id": 6636,
+  "name": "Pedra de FOR (Topo)",
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "영혼의조각",
+  "description": "Leve essa pedra para <NAVI>[Loja Fashion]<INFO>mal_in01,23,113,0,100,0,0</INFO></NAVI> encantar seu visual.\n-------------------------\n[^CD3278Efeito^000000]\n^0000ffFOR +1.^000000",
+  "view": 0,
+  "spriteView": 0,
+  "spriteBlank": false,
+  "viewKind": null,
+  "equipSlots": [],
+  "costume": false
+ },
+ {
+  "id": 15280,
+  "name": "Malha Sombria do Ataque Crítico",
+  "slots": 0,
+  "aegisName": "S_CriticalHit_Armor",
+  "resourceName": "아머쉐도우3",
+  "description": "Tipo: ^777777Equip. Sombrio^000000\nPosição: ^777777Armadura^000000",
+  "view": 0,
+  "spriteView": 0,
+  "viewKind": null,
+  "equipSlots": [],
+  "costume": true
+ },
+ {
+  "id": 19424,
+  "name": "[Visual] Crânio de Esqueleão",
+  "slots": 0,
+  "aegisName": "C_Master_Cat",
+  "resourceName": "Master_Cat",
+  "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Meio e Baixo^000000",
+  "view": 1806,
+  "spriteView": 1806,
+  "viewKind": "headgear",
+  "equipSlots": [
+   "mid",
+   "low"
+  ],
+  "costume": true
+ },
+ {
+  "id": 19920,
+  "name": "Máscara de Sussurro Assustador",
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "진화된위스퍼마스크",
+  "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Topo, Meio e Baixo^000000",
+  "view": 0,
+  "spriteView": 458,
+  "viewKind": "headgear",
+  "equipSlots": [
+   "top",
+   "mid",
+   "low"
+  ],
+  "costume": false
+ },
+ {
+  "id": 20330,
+  "name": "[Visual] Chapéu de Solita",
+  "slots": 0,
+  "aegisName": "C_Sombrero",
+  "resourceName": "솜브레로",
+  "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Topo^000000",
+  "view": 0,
+  "spriteView": 151,
+  "viewKind": "headgear",
+  "equipSlots": [
+   "top"
+  ],
+  "costume": false
+ },
+ {
+  "id": 25058,
+  "name": "Pedra Gráfica: Cintilação (Topo)",
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "블루크리스탈조각",
+  "description": "Leve essa pedra para a <NAVI>[Loja Fashion]<INFO>mal_in01,24,121,0,101,0</INFO></NAVI>.\n--------------------------\n[^CD3278Efeito^000000]\n^0000ffExibe efeito gráfico que pode ser desativado com /effect^000000.",
+  "view": 0,
+  "spriteView": 0,
+  "spriteBlank": false,
+  "viewKind": null,
+  "equipSlots": [],
+  "costume": false
+ },
+ {
+  "id": 25137,
+  "name": "Pedra Gráfica: Aura Verde (Baixo)",
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "블루크리스탈조각",
+  "description": "Leve essa pedra para a <NAVI>[Loja Fashion]<INFO>mal_in01,24,121,0,100,0,0</INFO></NAVI> em Malangdo.\n-------------------------\n[^CD3278Efeito^000000]\nExibe uma aura verde nos pés do personagem.\n^008080Exibe efeito gráfico que pode ser desligado com /effect.^000000",
+  "view": 0,
+  "spriteView": 0,
+  "spriteBlank": false,
+  "viewKind": null,
+  "equipSlots": [],
+  "costume": false
+ },
+ {
+  "id": 25138,
+  "name": "Pedra Gráfica: Miniatura (Meio)",
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "블루크리스탈조각",
+  "description": "Leve essa pedra para a <NAVI>[Loja Fashion]<INFO>mal_in01,24,121,0,100,0,0</INFO></NAVI> em Malangdo.\n-------------------------\n[^CD3278Efeito^000000]\nDeixa o personagem menor.",
+  "view": 0,
+  "spriteView": 0,
+  "spriteBlank": false,
+  "viewKind": null,
+  "equipSlots": [],
+  "costume": false
+ },
+ {
+  "id": 25225,
+  "name": "Pedra Gráfica: Raios Vermelhos (Meio)",
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "블루크리스탈조각",
+  "description": "Leve essa pedra para a <NAVI>[Loja Fashion]<INFO>mal_in01,24,121,0,100,0,0</INFO></NAVI> em Malangdo.\n-------------------------\n[^CD3278Efeito^000000]\nExibe raios vermelhos ao redor do personagem.\n^008080Exibe efeito gráfico que pode ser desligado com /effect.^000000",
+  "view": 0,
+  "spriteView": 0,
+  "spriteBlank": false,
+  "viewKind": null,
+  "equipSlots": [],
+  "costume": false
+ },
+ {
+  "id": 29040,
+  "name": "Gráfico: Fantasmas",
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "블루크리스탈조각",
+  "description": "Exibe fantasmas ao redor do personagem.\n--------------------------\n^008080Exibe efeito gráfico que pode ser desligado com /effect.^000000",
+  "view": 0,
+  "spriteView": 0,
+  "spriteBlank": false,
+  "viewKind": null,
+  "equipSlots": [],
+  "costume": false
+ },
+ {
+  "id": 31379,
+  "name": "Gira-Cocuruto",
+  "slots": 0,
+  "aegisName": "C_Drama_Clockwork",
+  "resourceName": "연극용태엽키",
+  "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Topo^000000",
+  "view": 1335,
+  "spriteView": 1335,
+  "viewKind": "headgear",
+  "equipSlots": [
+   "top"
+  ],
+  "costume": true
+ },
+ {
+  "id": 480097,
+  "name": "[Visual] Aura Nevada",
+  "slots": 0,
+  "aegisName": "C_Snow_Powder",
+  "resourceName": "C_Snow_Powder",
+  "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Capa^000000",
+  "view": 0,
+  "spriteView": 100,
+  "spriteBlank": false,
+  "viewKind": "garment",
+  "equipSlots": [
+   "garment"
+  ],
+  "costume": true
+ },
+ {
+  "id": 480177,
+  "name": "Buquê Gigantesco",
+  "slots": 0,
+  "aegisName": "C_Clutch_Bouquet",
+  "resourceName": "C_Clutch_Bouquet",
+  "description": "Tipo: ^777777Visual ^000000\nEquipa em: ^777777Baixo^000000",
+  "view": 128,
+  "spriteView": 128,
+  "viewKind": "garment",
+  "equipSlots": [
+   "low"
+  ],
+  "costume": true
+ },
+ {
+  "id": 480237,
+  "name": null,
+  "slots": 0,
+  "aegisName": "C_Katana_TenguMaster",
+  "resourceName": "C_Katana_TenguMaster",
+  "description": "",
+  "view": 158,
+  "spriteView": 158,
+  "spriteBlank": false,
+  "viewKind": "garment",
+  "equipSlots": [],
+  "costume": true
+ },
+ {
+  "id": 480807,
+  "name": "[Visual] Escudo Petulante",
+  "slots": 0,
+  "aegisName": "C_Cynic_Guard_CP",
+  "resourceName": "C_Cynic_Guard",
+  "description": "Tipo: ^777777Visual^000000\nEquipa em: ^777777Capa^000000",
+  "view": 2828,
+  "spriteView": 2828,
+  "viewKind": "headgear",
+  "equipSlots": [
+   "garment"
+  ],
+  "costume": true
+ },
+ {
+  "id": 1001907,
+  "name": "Pedra de Pegada: Bolinhos (Capa)",
+  "slots": 0,
+  "aegisName": "Dumpling_Foot_Robe",
+  "resourceName": "발자국이펙트",
+  "description": "Leve essa pedra para a <NAVI>[Loja Fashion]<INFO>mal_in01,24,121,0,100,0,0</INFO></NAVI> em Malangdo.\n--------------------------\n[^CD3278Efeito^000000]\nExibe Bolinhos Chineses, o Bao, quando o personagem se movimenta.\n^008080Exibe efeito gráfico que pode ser desligado com /effect.^000000",
+  "view": 0,
+  "spriteView": 0,
+  "spriteBlank": false,
+  "viewKind": null,
+  "equipSlots": [],
+  "costume": false
+ },
+ {
+  "id": 1002194,
+  "name": "Gráfico: Espírito de Influência (Meio)",
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "블루크리스탈조각",
+  "description": "Leve essa pedra para adicionar um <NAVI>[encanto]<INFO>starhall,62,90,0,100,0,0</INFO></NAVI>\n--------------------------\n[^CD3278Efeito^000000]\nExibe o Espírito de Influência ao redor do personagem.\n--------------------------\n^008080Exibe efeito gráfico que pode ser desligado com /effect.^000000",
+  "view": 0,
+  "spriteView": 0,
+  "spriteBlank": false,
+  "viewKind": null,
+  "equipSlots": [],
+  "costume": false
+ },
+ {
+  "id": 1002239,
+  "name": "Pegadas do Banguela (Capa)",
+  "slots": 0,
+  "aegisName": null,
+  "resourceName": "발자국이펙트",
+  "description": "Encante o 4º slot de um Visual de Capa para aplicar este efeito.",
+  "view": 0,
+  "spriteView": 0,
+  "spriteBlank": false,
+  "viewKind": null,
+  "equipSlots": [],
+  "costume": false
+ }
 ]

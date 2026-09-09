@@ -3,7 +3,9 @@
 // obvious: one ordinary human class, one with an alternative outfit, a
 // gender-locked (female-only) class, a pair the GAME locks though their data
 // carries both genders (Bardo/Odalisca), a doram-race class, and a mix of
-// single- and multi-slot costumes.
+// single- and multi-slot costumes, plus a graphic stone per position (one of
+// them without an effect bundle, the state the real data ships in until
+// ragassets extracts it).
 
 import type { Db } from "../core/db";
 
@@ -122,6 +124,51 @@ export function makeDb(): Db {
       // Slot and sprite table disagree, both ways (see viewKindOf).
       { id: 700, name: "Capa com Sprite de Acessório", view: 70, slots: ["garment"], viewKind: "headgear" },
       { id: 800, name: "Baixo com Sprite de Capa", view: 80, slots: ["low"], viewKind: "garment" },
+    ],
+    stones: [
+      { id: 1100, name: "Pedra Gráfica: Brilho (Topo)", slot: "top", slots: ["top"], stone: true, effect: "glow" },
+      { id: 1200, name: "Pedra Gráfica: Névoa (Meio)", slot: "mid", slots: ["mid"], stone: true, effect: "mist" },
+      // No effect bundle yet — listed and equippable, but nothing to draw.
+      { id: 1300, name: "Pedra Gráfica: Sombra (Baixo)", slot: "low", slots: ["low"], stone: true },
+      // A footprint with its trail published…
+      {
+        id: 1400,
+        name: "Pedra de Pegada: Patas (Capa)",
+        slot: "garment",
+        slots: ["garment"],
+        stone: true,
+        footprint: true,
+        steps: {
+          bottomLeft: "paw_l",
+          bottomRight: "paw_r",
+          topLeft: "paw_puff",
+          topRight: "paw_puff",
+          scaleBottom: 1,
+          scaleTop: 1,
+          heightTop: 0,
+          stride: 30,
+          gap: 10,
+          adjustAngle: true,
+        },
+      },
+      // Drawn from the client's built-in effect table, not from a .str.
+      {
+        id: 1600,
+        name: "Pedra Gráfica: Encolher (Meio)",
+        slot: "mid",
+        slots: ["mid"],
+        stone: true,
+        builtin: { kind: "scale", scale: 0.5 },
+      },
+      // …and one ragassets knows is a footprint but hasn't bundled yet.
+      {
+        id: 1500,
+        name: "Pedra de Pegada: Bolhas (Capa)",
+        slot: "garment",
+        slots: ["garment"],
+        stone: true,
+        footprint: true,
+      },
     ],
   };
 }

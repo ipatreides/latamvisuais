@@ -31,6 +31,95 @@ export function viewKindOf(item: Pick<Costume, "slots" | "viewKind">): "headgear
   return item.viewKind ?? (item.slots.includes("garment") ? "garment" : "headgear");
 }
 
+/** The bundle keys and placement numbers ragassets publishes for one footprint
+ *  costume, straight from the client's `FootPrintEffectTable`.
+ *
+ *  A footprint isn't one looping effect like an aura: the client stamps a decal
+ *  at each footstep out of a `bottom` effect (the mark on the ground) and an
+ *  optional `top` (the puff above it), spaced and offset by these numbers. They
+ *  are the client's own values, passed through unconverted — see
+ *  sim/render/footprint.ts for the one unit conversion this app makes. */
+export type FootprintSteps = {
+  bottomLeft: string;
+  bottomRight: string;
+  topLeft?: string;
+  topRight?: string;
+  scaleBottom: number;
+  scaleTop: number;
+  /** How far above the ground the top effect plays. */
+  heightTop: number;
+  /** Distance between successive prints, and how far each sits off the walk line. */
+  stride: number;
+  gap: number;
+  /** Whether the mark rotates to face the direction of travel. */
+  adjustAngle: boolean;
+};
+
+/** A graphic stone the client draws from its own code rather than from a ".str",
+ *  reproduced here from the effect's published parameters.
+ *
+ *  These are the rows whose `HatEffectInfo` entry carries a `hatEffectID` — an
+ *  `EF_` id into the client's built-in effect table — instead of a
+ *  `resourceFileName`, so there is no file for ragassets to extract. The id
+ *  itself is read out of the client's Lua tables; what that id DOES comes from
+ *  roBrowser's port of the same effect table, which is where every binary-format
+ *  parser in this repo comes from too. Nothing here is inferred from an item
+ *  description — see BUILTIN_EFFECT in tools/sync-db.mjs for the sourcing, and
+ *  note that most of these effects are in neither source and stay preview-less
+ *  rather than being invented.
+ *
+ *  - `scale`  — the effect only resizes the character (EF 421 sets the entity's
+ *    xSize/ySize to 2.5 against a default of 5, i.e. exactly half).
+ *  - `sprite` — it plays a looping .spr/.act attached to the character, which
+ *    ragassets already bundles at /effects/sprites/<key>/. */
+export type BuiltinEffect =
+  | { kind: "scale"; scale: number }
+  | {
+      kind: "sprite";
+      /** Bundle key under /effects/sprites/ (see sim/spriteEffect.ts). */
+      key: string;
+      /** Play at the top of the sprite rather than at the feet (`head: true`). */
+      head?: boolean;
+      /** The effect's own screen-up offset, in sprite pixels (RO y is down, so
+       *  the table's negative values lift it). */
+      yOffset?: number;
+      /** Draw behind the character (`renderBeforeEntities`). */
+      behind?: boolean;
+    };
+
+/** Whether anything will actually be drawn for this stone. Three different
+ *  mechanisms can supply it — a ".str" bundle, a footprint trail, or the client's
+ *  own built-in effect table — and every caller wants the same answer, so it
+ *  lives here rather than being spelled out at each call site (it had already
+ *  drifted into three copies that disagreed). */
+export function canPreview(stone: Stone): boolean {
+  return !!(stone.effect || stone.steps || stone.builtin);
+}
+
+/** A "Pedra Gráfica" — the graphic-effect enchant the Loja Fashion puts INSIDE a
+ *  costume (browiki "Encantamento de Visual"). It never occupies a visual slot
+ *  of its own: a character wears a Topo costume *and* has a Topo stone enchanted
+ *  into it, so stones live in their own build layer (`State.enchants`).
+ *
+ *  Shaped as a Costume so the catalogue's tiles, rows, icons and market lookups
+ *  take one without changes — `stone: true` is what tells the two apart at the
+ *  points where the behaviour differs (equipping, and the slot cards). `slots`
+ *  always holds exactly the one position the stone is locked to; `slot` is that
+ *  same position, unwrapped, for the code that only ever wants the one. */
+export type Stone = Costume & {
+  stone: true;
+  slot: Slot;
+  /** True for the "Pegadas" — the stones the client draws per footstep rather
+   *  than as one effect on the body. Set even when `steps` is absent, which is
+   *  how the UI tells "appears when you walk, not extracted yet" apart from an
+   *  effect the client keeps in its own code and nothing can ever draw. */
+  footprint?: true;
+  /** How to draw that trail, when ragassets has published the bundles. */
+  steps?: FootprintSteps;
+  /** Drawn from the client's built-in effect table rather than from a .str. */
+  builtin?: BuiltinEffect;
+};
+
 export type PaletteInfo = {
   count: number;
   /** Representative hex color per palette index (null when unsampled). */
@@ -67,13 +156,28 @@ export type Db = {
   classes: ClassInfo[];
   hair: HairDb;
   costumes: Costume[];
+  stones: Stone[];
+};
+
+/** The stones file stores each stone's one position as `slot`; the rest of the
+ *  app treats a stone as a Costume, which carries `slots`. Widen on read so
+ *  both spellings are there and neither side has to remember the other's. */
+type RawStone = {
+  id: number;
+  name: string;
+  slot: Slot;
+  effect?: string;
+  footprint?: true;
+  steps?: FootprintSteps;
+  builtin?: BuiltinEffect;
 };
 
 export async function loadDb(): Promise<Db> {
-  const [classes, hair, costumes, effects] = await Promise.all([
+  const [classes, hair, costumes, stones, effects] = await Promise.all([
     fetchJson<{ classes: ClassInfo[] }>("db/classes.json"),
     fetchJson<HairDb>("db/hair.json"),
     fetchJson<{ items: Costume[] }>("db/costumes.json"),
+    fetchJson<{ items: RawStone[] }>("db/stones.json"),
     // World-effect costumes (auras, falling petals, spotlights — drawn by the
     // client's .str effect system, so view-less and only renderable in the map
     // sim). Served by ragassets (extract-grf.mjs --effects); tolerate failure so
@@ -88,10 +192,13 @@ export async function loadDb(): Promise<Db> {
   ]);
   const items = [...costumes.items, ...effects.items]
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR") || a.id - b.id);
+  const stoneItems: Stone[] = stones.items
+    .map((s) => ({ ...s, slots: [s.slot], stone: true as const }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR") || a.id - b.id);
   // Drop classes unreleased on LATAM (no party icon) — they shouldn't appear in
   // the picker (or anywhere else).
   const released = classes.classes.filter((c) => !c.unreleased);
-  return { classes: released, hair, costumes: items };
+  return { classes: released, hair, costumes: items, stones: stoneItems };
 }
 
 /** Shared by every JSON read in core/ (the DBs here, the market in market.ts). */

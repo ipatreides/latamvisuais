@@ -41,6 +41,7 @@ function esc(s) {
 function build() {
   const classes = readJson("public/db/classes.json").classes ?? [];
   const costumes = readJson("public/db/costumes.json").items ?? [];
+  const stones = readJson("public/db/stones.json").items ?? [];
 
   // Released classes only (drop the unreleased LATAM placeholders), by name.
   const classNames = classes
@@ -80,20 +81,37 @@ function build() {
     parts.push(`<h2>Visuais de ${SLOT_LABELS[slot]}</h2>`);
     parts.push("<ul>" + names.map((n) => `<li>${esc(n)}</li>`).join("") + "</ul>");
   }
+
+  // Graphic stones get one section rather than being folded into the slot lists:
+  // they aren't visuals of that position, they are the enchants that go inside
+  // one, and their own names already end in "(Topo)".
+  const stoneNames = [...new Set(stones.map((s) => s.name))].sort((a, b) =>
+    a.localeCompare(b, "pt-BR"),
+  );
+  if (stoneNames.length) {
+    parts.push("<h2>Pedras Gráficas</h2>");
+    parts.push("<ul>" + stoneNames.map((n) => `<li>${esc(n)}</li>`).join("") + "</ul>");
+  }
   parts.push("</section>");
 
-  return { html: parts.join(""), classCount: classNames.length, costumeCount };
+  return {
+    html: parts.join(""),
+    classCount: classNames.length,
+    costumeCount,
+    stoneCount: stoneNames.length,
+  };
 }
 
 function main() {
-  const { html, classCount, costumeCount } = build();
+  const { html, classCount, costumeCount, stoneCount } = build();
   const page = readFileSync(DIST, "utf8");
   if (!page.includes(MARKER)) {
     throw new Error(`prerender-seo: marker ${MARKER} not found in dist/index.html`);
   }
   writeFileSync(DIST, page.replace(MARKER, html), "utf8");
   console.log(
-    `prerender-seo: injected ${classCount} classes + ${costumeCount} costume entries into dist/index.html`,
+    `prerender-seo: injected ${classCount} classes + ${costumeCount} costume entries ` +
+      `+ ${stoneCount} graphic stones into dist/index.html`,
   );
 }
 

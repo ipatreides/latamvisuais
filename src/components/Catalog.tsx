@@ -1,8 +1,14 @@
 // Costume catalogue: case- and accent-insensitive search over every costume
-// extracted from the client (name or item id), narrowed by slot and by what our
-// market knows about the item. Two views share the filtering: a grid of
-// game-frame tiles (icons only, the compact default) and a list of rows with the
-// full name and the current price.
+// extracted from the client (name or item id), narrowed by kind, by slot and by
+// what our market knows about the item.
+//
+// "Kind" is costumes vs graphic stones ("Pedras Gráficas"). Both are items you
+// look up, search and buy the same way, so they share one grid and one search
+// box; what differs is only where a click puts them — a costume goes into the
+// slot, a stone into that slot's enchant (see core/state.ts).
+//
+// Two views share the filtering: a grid of game-frame tiles (icons only, the
+// compact default) and a list of rows with the full name and the current price.
 //
 // Items are a grid of game-frame tiles showing each item's icon, with the name +
 // id in the shared tooltip. Clicking a tile equips/unequips it. Tiles stay
@@ -16,14 +22,14 @@
 // rather than an index so it survives a filter, a search or a view switch.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Costume, Slot } from "../core/db";
+import type { Costume, Slot, Stone } from "../core/db";
 import { hint } from "../core/hints";
 import { persisted } from "../core/prefs";
 import { fold } from "../core/text";
 import { useMarketIds } from "../hooks/useMarketIds";
 import { t } from "../i18n";
 import { useAppState, useDb, useDispatch } from "../state/AppStateContext";
-import { CatalogFilters, type MarketFilter } from "./CatalogFilters";
+import { CatalogFilters, type KindFilter, type MarketFilter } from "./CatalogFilters";
 import { CatalogList } from "./CatalogList";
 import { CostumeIcon } from "./CostumeIcon";
 import { Grid, List } from "./icons";
@@ -39,6 +45,8 @@ const NONE: ReadonlySet<number> = new Set();
 type Props = {
   slotFilter: Slot | null;
   onSlotFilterChange: (slot: Slot | null) => void;
+  kindFilter: KindFilter;
+  onKindFilterChange: (kind: KindFilter) => void;
   /** Bumps when a slot card is clicked, so the grid scrolls back to the top. */
   pickSignal: number;
   /** False while the map sim covers the page: the catalogue stays mounted
@@ -46,7 +54,14 @@ type Props = {
   keyboardEnabled: boolean;
 };
 
-export function Catalog({ slotFilter, onSlotFilterChange, pickSignal, keyboardEnabled }: Props) {
+export function Catalog({
+  slotFilter,
+  onSlotFilterChange,
+  kindFilter,
+  onKindFilterChange,
+  pickSignal,
+  keyboardEnabled,
+}: Props) {
   const db = useDb();
   const state = useAppState();
   const dispatch = useDispatch();
@@ -66,12 +81,17 @@ export function Catalog({ slotFilter, onSlotFilterChange, pickSignal, keyboardEn
   const [marketWanted, setMarketWanted] = useState(false);
   const market = useMarketIds(marketWanted);
 
-  // Each costume's search haystack (folded name + id) — independent of state,
-  // so compute it once.
-  const haystacks = useMemo(
-    () => db.costumes.map((item) => `${fold(item.name)} ${item.id}`),
-    [db.costumes],
+  // One array over both kinds, in the order the grid shows them: costumes first,
+  // then the stones. Concatenating rather than interleaving keeps the costume
+  // grid people already know exactly as it was, with the stones as a short tail.
+  const all = useMemo<(Costume | Stone)[]>(
+    () => [...db.costumes, ...db.stones],
+    [db.costumes, db.stones],
   );
+
+  // Each item's search haystack (folded name + id) — independent of state, so
+  // compute it once.
+  const haystacks = useMemo(() => all.map((item) => `${fold(item.name)} ${item.id}`), [all]);
 
   const q = fold(query.trim());
   // The one set the filter asks about, or `null` for "don't ask". A market filter
@@ -92,19 +112,22 @@ export function Catalog({ slotFilter, onSlotFilterChange, pickSignal, keyboardEn
   // and then invalidate the window and price ids downstream.
   const shown = useMemo(
     () =>
-      db.costumes.map(
+      all.map(
         (item, i) =>
           (!q || haystacks[i].includes(q)) &&
+          (kindFilter === "all" || (kindFilter === "stone") === isStone(item)) &&
           (!slotFilter || item.slots.includes(slotFilter)) &&
+          // A stone only ever holds one position, so "só de uma posição" can
+          // never exclude one — it exists to hide the Topo+Meio costume sets.
           (!singleSlotOnly || item.slots.length === 1) &&
           (!marketSet || marketSet.has(item.id)),
       ),
-    [db.costumes, haystacks, q, slotFilter, singleSlotOnly, marketSet],
+    [all, haystacks, q, kindFilter, slotFilter, singleSlotOnly, marketSet],
   );
   // The filtered items in display order. The list view windows over this, and
   // the arrow keys step through it; both need the same array, so it's built
   // once here rather than twice.
-  const visibleItems = useMemo(() => db.costumes.filter((_, i) => shown[i]), [db.costumes, shown]);
+  const visibleItems = useMemo(() => all.filter((_, i) => shown[i]), [all, shown]);
   const visibleCount = visibleItems.length;
 
   // Scroll the grid back to the top when a slot card opened the catalogue.
@@ -143,8 +166,11 @@ export function Catalog({ slotFilter, onSlotFilterChange, pickSignal, keyboardEn
     arrowHint.spend();
     setCursorId(item.id);
     // `equip`, not `toggleEquip`: passing over something already worn should
-    // land on it, not take it off.
-    dispatch({ type: "equip", item });
+    // land on it, not take it off. A stone has no unconditional counterpart —
+    // `toggleEnchant` only takes one off when it is the one already in that
+    // position, which the guard above has just ruled out.
+    if (isStone(item)) dispatch({ type: "toggleEnchant", stone: item });
+    else dispatch({ type: "equip", item });
   };
 
   useEffect(() => {
@@ -184,11 +210,19 @@ export function Catalog({ slotFilter, onSlotFilterChange, pickSignal, keyboardEn
   }, [cursorId, view]);
 
   // A click is what arms the keyboard, so it's also where the hint belongs.
-  const pick = (item: Costume, el: HTMLElement) => {
+  const pick = (item: Costume | Stone, el: HTMLElement) => {
     setCursorId(item.id);
-    dispatch({ type: "toggleEquip", item });
+    if (isStone(item)) dispatch({ type: "toggleEnchant", stone: item });
+    else dispatch({ type: "toggleEquip", item });
     arrowHint.show(el, view === "list" ? t.hintArrowsList : t.hintArrowsGrid);
   };
+
+  /** Whether the item is currently on the character — in its slot for a costume,
+   *  in that slot's enchant for a stone. Shared by both views' "is-equipped". */
+  const isOn = (item: Costume | Stone) =>
+    isStone(item)
+      ? state.enchants[item.slot]?.id === item.id
+      : item.slots.every((s) => state.equipped[s]?.id === item.id);
 
   // Only while a market filter is on: with none, a failed lookup changes nothing
   // on screen, and list rows say "preço indisponível" for themselves.
@@ -215,6 +249,8 @@ export function Catalog({ slotFilter, onSlotFilterChange, pickSignal, keyboardEn
           }}
           slotFilter={slotFilter}
           onSlotFilterChange={onSlotFilterChange}
+          kindFilter={kindFilter}
+          onKindFilterChange={onKindFilterChange}
           marketFilter={marketFilter}
           onMarketFilterChange={(filter) => {
             setMarketFilter(filter);
@@ -253,20 +289,33 @@ export function Catalog({ slotFilter, onSlotFilterChange, pickSignal, keyboardEn
       {marketNote && <div className="catalog-note">{marketNote}</div>}
 
       {view === "list" ? (
-        <CatalogList items={visibleItems} cursorId={cursorId} onPick={pick} pickSignal={pickSignal} />
+        <CatalogList
+          items={visibleItems}
+          cursorId={cursorId}
+          isOn={isOn}
+          onPick={pick}
+          pickSignal={pickSignal}
+        />
       ) : (
         // The card is a box outside the scroller so it can clip its scrollbar
         // to the rounded corners (see .catalog-scroll).
         <div className="catalog-scroll">
           <div className="catalog-grid" role="list" ref={gridRef}>
-            {db.costumes.map((item, i) => {
-              const equipped = item.slots.every((s) => state.equipped[s]?.id === item.id);
+            {all.map((item, i) => {
+              const equipped = isOn(item);
               const label = `${item.name} (#${item.id})`;
+              const cls = [
+                "catalog-item",
+                equipped ? "is-equipped" : "",
+                isStone(item) ? "is-stone" : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
               return (
                 <button
                   key={item.id}
                   type="button"
-                  className={equipped ? "catalog-item is-equipped" : "catalog-item"}
+                  className={cls}
                   role="listitem"
                   data-tip={label}
                   aria-label={label}
@@ -309,4 +358,11 @@ function columnsOf(grid: HTMLElement | null, view: (typeof VIEWS)[number]): numb
   if (view !== "grid" || !grid) return 1;
   const tracks = getComputedStyle(grid).gridTemplateColumns;
   return tracks.split(/\s+/).filter(Boolean).length || 1;
+}
+
+/** Costumes and stones share one array; this is the discriminator. Stones carry
+ *  `stone: true` from core/db.ts precisely so the narrowing is one field read
+ *  rather than a guess at the shape. */
+function isStone(item: Costume | Stone): item is Stone {
+  return "stone" in item;
 }

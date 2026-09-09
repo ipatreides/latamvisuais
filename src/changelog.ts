@@ -14,6 +14,23 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.14.0",
+    date: "2026-09-09",
+    changes: [
+      "Chegaram as Pedras Gráficas — as 29 pedras de encanto visual da Loja Fashion de Malangdo, das auras e brilhos às pegadas. Elas aparecem no catálogo junto com os visuais e são escolhidas como qualquer outro item.",
+      "Cada pedra tem uma linha própria embaixo do visual, em cada posição, porque é isso que ela é no jogo: um encanto que vai DENTRO do visual, não no lugar dele. Dá para ter um Topo equipado e uma pedra de Topo dentro dele ao mesmo tempo, e tirar um sem tirar o outro.",
+      "Toda pedra só entra em uma posição, e o próprio jogo escreve isso no nome dela (“Pedra Gráfica: Camélia (Topo)”). Clicando na linha de pedra vazia de uma posição, o catálogo já mostra só as que cabem ali. As pegadas são todas de Capa.",
+      "Filtro novo de Tipo, ao lado dos de Posição: “Visuais”, “Pedras gráficas”, ou os dois juntos — que é como vêm por padrão, para dar de achar as pedras sem saber que elas existiam.",
+      "As pedras entram no link de compartilhamento junto com os visuais, sem deixá-lo maior, e links antigos continuam abrindo igual. Entram também na lista de desejos, logo abaixo do visual em que vão, cada uma com seu link para o Divine-Pride e para o mercado.",
+      "Na visão de mapa, 22 das 29 já aparecem. O efeito de uma pedra nunca sai na prévia 2D: quem desenha é o sistema de efeitos do jogo, não o desenho do personagem.",
+      "As seis pegadas aparecem do jeito certo: o jogo não as gruda no personagem, ele carimba uma marca no chão a cada passo e deixa ela para trás. É assim que saem aqui — a marca fica onde o pé pisou, deitada no chão, virada para o lado em que você anda, e some sozinha.",
+      "A Miniatura encolhe o personagem pela metade, e os Raios Vermelhos e o Espaço Digital ganharam o desenho deles. Esses três o jogo desenha por conta própria, sem arquivo de efeito — os números saíram das tabelas do próprio cliente, não de chute.",
+      "As sete que faltam (Raios Azuis, Aura Verde, Aura Azul, Sombra, Bolha Rosa, Palidez e Ventania) ficam sem prévia, e agora está escrito “sem prévia” no quadrinho delas. São efeitos que vêm dentro do próprio programa do jogo, sem arquivo nenhum para tirar de lá. Continuam na lista, com nome e preço, porque continuam existindo no jogo.",
+      "De quebra, duas correções que valem para TODOS os efeitos do mapa, não só para as pedras: as cores voltaram ao lugar (cada camada de um efeito traz a própria cor e o simulador estava ignorando ela — por isso o Espírito de Influência saía sem o vermelho e a Camélia sem o rosa), e sumiram as manchas retangulares que apareciam em volta de alguns efeitos, como se o desenho tivesse uma moldura invisível.",
+    ],
+    credit: "Obrigado a d.machaado, que reportou as pedras gráficas — inclusive o tamanho e a cor das pegadas.",
+  },
+  {
     version: "0.13.2",
     date: "2026-09-01",
     changes: [
