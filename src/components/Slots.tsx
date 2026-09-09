@@ -12,7 +12,7 @@ import { canPreview, SLOTS, type Slot, type Stone } from "../core/db";
 import { itemIconUrl } from "../core/state";
 import { t } from "../i18n";
 import { useAppState, useDispatch } from "../state/AppStateContext";
-import { ClearX, Map } from "./icons";
+import { ClearX } from "./icons";
 
 /** What an empty row on a card asks the catalogue for. */
 export type PickKind = "costume" | "stone";
@@ -40,11 +40,6 @@ export function Slots({ onPick }: { onPick: (slot: Slot, kind: PickKind) => void
               <div className="slot-name" data-tip={item ? `${item.name} (${item.id})` : undefined}>
                 {item ? item.name : t.slotEmpty}
               </div>
-              {item?.effect && (
-                <span className="slot-effect" data-tip={t.effectOnlyNote} aria-label={t.effectOnlyNote}>
-                  <Map />
-                </span>
-              )}
               <button
                 type="button"
                 className="slot-clear"
@@ -76,16 +71,14 @@ export function Slots({ onPick }: { onPick: (slot: Slot, kind: PickKind) => void
             >
               <SlotIcon key={stone?.id ?? "empty"} id={stone?.id} className="slot-stone-icon" />
               <div className="slot-stone-name">{stone ? stone.name : t.stoneEmpty}</div>
-              {/* Said on the card, not only in the glyph's tooltip: a stone that
-                  cannot be drawn looks identical to one that simply hasn't
-                  animated yet, and hovering a 13px icon is not how anyone finds
-                  that out. The glyph still carries the full reason. */}
-              {stone && !canPreview(stone) && (
-                <span className="slot-stone-note">{t.stoneNoEffectShort}</span>
-              )}
-              {/* One glyph, three states — a stone's effect never reaches the 2D
-                  preview, so the only question is what the MAP can do with it. */}
-              {stone && <StoneMark stone={stone} />}
+              {/* A word, only where there is something a reader can't already
+                  see. An ordinary effect says nothing: it is drawn on the
+                  preview in front of them. A footprint says so, because it is
+                  stamped per step and only ever shows in the map view. And a
+                  stone nothing can draw has to say that outright — it looks
+                  identical to one that simply hasn't animated yet, and the full
+                  reason is a hover away. */}
+              {stone && <StoneNote stone={stone} />}
               {stone && !item && <span className="slot-stone-warn" aria-hidden="true">!</span>}
               <button
                 type="button"
@@ -105,30 +98,29 @@ export function Slots({ onPick }: { onPick: (slot: Slot, kind: PickKind) => void
   );
 }
 
-/** What the map can do with this stone, as one glyph and its explanation:
+/**
+ * One word for the stones whose behaviour a reader cannot simply look at, with
+ * the full reason on hover. Nothing at all for an ordinary effect, which is
+ * drawn on the preview beside this card.
  *
- *  - lit — ragassets ships the effect, so the map draws it (a footprint says so
- *    differently, since it only appears while walking);
- *  - dimmed — nothing can draw it. Two different reasons, and the tooltip has to
- *    separate them: a footprint whose artwork simply hasn't been extracted yet
- *    is waiting on work, while the rest are effects the client keeps in its own
- *    code with no file to extract at all. */
-function StoneMark({ stone }: { stone: Stone }) {
+ * "pegada" — drawn on the ground per footstep, so it appears in the map view
+ * and never on the preview. "sem prévia" — nothing can draw it, for one of two
+ * reasons the tooltip has to keep apart: a footprint whose artwork simply
+ * hasn't been extracted yet is waiting on work, while the rest are effects the
+ * client keeps in its own code with no file to extract at all.
+ */
+function StoneNote({ stone }: { stone: Stone }) {
   const drawable = canPreview(stone);
-  const note = drawable
-    ? stone.footprint
-      ? t.stoneFootprint
-      : t.effectOnlyNote
+  if (drawable && !stone.footprint) return null;
+  const label = drawable ? t.stoneFootprintShort : t.stoneNoEffectShort;
+  const reason = drawable
+    ? t.stoneFootprint
     : stone.footprint
       ? t.stoneFootprintPending
       : t.stoneNoEffect;
   return (
-    <span
-      className={drawable ? "slot-effect" : "slot-effect is-unavailable"}
-      data-tip={note}
-      aria-label={note}
-    >
-      <Map />
+    <span className="slot-stone-note" data-tip={reason} aria-label={reason}>
+      {label}
     </span>
   );
 }

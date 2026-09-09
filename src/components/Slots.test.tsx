@@ -81,55 +81,39 @@ describe("Slots", () => {
     expect(card("Topo").querySelector(".slot-stone-warn")).toBeNull();
   });
 
-  // 12 of the 29 real stones have an effect bundle; the rest are effects the
-  // client keeps in its own code, with no file to extract. The card has to say
-  // which, because neither ever shows up in the 2D preview.
-  it("marks a stone the map can draw", () => {
+  // Each of the three states as one word, with the full reason on hover. The
+  // word matters more than the tooltip: hovering a note is not how anyone
+  // discovers that a stone will never draw, so the card has to say it outright.
+  it("says nothing at all for a stone that simply draws", () => {
     renderSlots({ equipped: { top: item(100) }, enchants: { top: stone(1100) } });
-    const mark = within(card("Topo")).getByLabelText("Só aparece no mapa");
-    expect(mark).not.toHaveClass("is-unavailable");
+    expect(card("Topo").querySelector(".slot-stone-note")).toBeNull();
   });
 
-  it("marks a stone with no effect bundle as having no preview at all", () => {
+  it("calls a drawable footprint a footprint, and says when it appears", () => {
+    renderSlots({ equipped: { garment: item(400) }, enchants: { garment: stone(1400) } });
+    const note = within(card("Capa")).getByText("pegada");
+    expect(note).toHaveAttribute("data-tip", expect.stringMatching(/enquanto o personagem anda/));
+  });
+
+  it("says a stone with no effect bundle has no preview at all", () => {
     // 1300 is the fixture's keyless stone.
     renderSlots({ equipped: { low: item(300) }, enchants: { low: stone(1300) } });
-    expect(within(card("Baixo")).getByLabelText(/Sem prévia/)).toHaveClass("is-unavailable");
+    const note = within(card("Baixo")).getByText("sem prévia");
+    expect(note).toHaveAttribute("data-tip", expect.stringMatching(/dentro do próprio programa|desenhado pelo próprio programa/));
   });
 
-  // A footprint is drawable but only while walking, and one whose artwork isn't
-  // extracted yet is a different situation from an effect the client keeps in
-  // its own code — three states, three sentences.
-  it("says a footprint appears while walking", () => {
-    renderSlots({ equipped: { garment: item(400) }, enchants: { garment: stone(1400) } });
-    const mark = within(card("Capa")).getByLabelText(/enquanto o personagem anda/);
-    expect(mark).not.toHaveClass("is-unavailable");
-  });
-
+  // A footprint whose artwork isn't extracted yet is a different situation from
+  // an effect the client keeps in its own code — same word, different reason.
   it("separates a footprint still waiting on its artwork from one nothing can draw", () => {
     renderSlots({ equipped: { garment: item(400) }, enchants: { garment: stone(1500) } });
-    const mark = within(card("Capa")).getByLabelText(/ainda não foi extraído/);
-    expect(mark).toHaveClass("is-unavailable");
-  });
-
-  // Hovering a 13px glyph is not how anyone discovers that a stone will never
-  // draw — the card has to say it outright.
-  it("says on the card when a stone has no preview at all", () => {
-    renderSlots({ equipped: { low: item(300) }, enchants: { low: stone(1300) } });
-    expect(within(card("Baixo")).getByText("sem prévia")).toBeInTheDocument();
-  });
-
-  it("says nothing extra for a stone the map can draw", () => {
-    renderSlots({ equipped: { top: item(100) }, enchants: { top: stone(1100) } });
-    expect(within(card("Topo")).queryByText("sem prévia")).not.toBeInTheDocument();
+    const note = within(card("Capa")).getByText("sem prévia");
+    expect(note).toHaveAttribute("data-tip", expect.stringMatching(/ainda não foi extraído/));
   });
 
   // A stone the client draws itself (no .str, no bundle) still previews — the
   // card must not lump it in with the ones nothing can draw.
   it("treats a built-in effect as drawable", () => {
     renderSlots({ equipped: { mid: item(200) }, enchants: { mid: stone(1600) } });
-    expect(within(card("Meio")).queryByText("sem prévia")).not.toBeInTheDocument();
-    expect(within(card("Meio")).getByLabelText("Só aparece no mapa")).not.toHaveClass(
-      "is-unavailable",
-    );
+    expect(card("Meio").querySelector(".slot-stone-note")).toBeNull();
   });
 });

@@ -5,24 +5,20 @@
 //
 // STR layers blend in one of two ways (D3D dst factor): straight alpha (petals,
 // discs) or additive glow (light spheres, halos). Those can't share one canvas —
-// additive content has a black background that would darken a straight-alpha
-// draw — so we keep two: a NormalBlending plane for the alpha layers and an
-// additive (src=ONE,dst=ONE) plane for the glow layers.
+// glow art is light on an opaque black field, which would blot out a
+// straight-alpha draw — so we keep two: a NormalBlending plane for the alpha
+// layers and an additive plane for the glow layers (see glowMaterial.ts).
 //
 // The canvas is sized to the effect's own content bounds (not a fixed window), so
 // large effects (clouds, waterfalls, the spotlight) aren't clipped into a hard
 // rectangle. The STR feet anchor (320,240) is mapped to the character's feet.
 
 import {
-  AddEquation,
+  type Camera,
   CanvasTexture,
-  CustomBlending,
   LinearFilter,
   Mesh,
   MeshBasicMaterial,
-  NormalBlending,
-  OneFactor,
-  type PerspectiveCamera,
   PlaneGeometry,
   type Scene,
   SRGBColorSpace,
@@ -30,7 +26,8 @@ import {
 } from "three";
 import { UNITS_PER_PX } from "../sprite";
 import { type LoadedEffect, sampleLayer } from "../effect";
-import { tinted } from "./tint";
+import { alphaMaterial, glowMaterial } from "./glowMaterial";
+import { glowSource, tinted } from "./tint";
 
 // The effect's ground/feet reference. RO costume auras author their ground content
 // (the poring disc, the petal backdrop) at STR y≈240, so we anchor STR (320,240) at
@@ -138,23 +135,13 @@ export class EffectBillboard {
     const geo = new PlaneGeometry(this.cw * this.px, this.ch * this.px);
     this.normMesh = new Mesh(
       geo,
-      new MeshBasicMaterial({ map: this.normTex, transparent: true, depthWrite: false, blending: NormalBlending, fog: false }),
+      alphaMaterial(this.normTex),
     );
-    // Additive glow: add the canvas RGB to the scene (src=ONE,dst=ONE), so the
-    // black background of the glow textures contributes nothing.
-    this.addMesh = new Mesh(
-      geo,
-      new MeshBasicMaterial({
-        map: this.addTex,
-        transparent: true,
-        depthWrite: false,
-        blending: CustomBlending,
-        blendSrc: OneFactor,
-        blendDst: OneFactor,
-        blendEquation: AddEquation,
-        fog: false,
-      }),
-    );
+    // Additive glow: add the canvas RGB to the scene, so the black background of
+    // the glow textures contributes nothing, and declare the coverage that
+    // colour implies — see glowMaterial.ts for why that has to happen in the
+    // shader rather than in the texture.
+    this.addMesh = new Mesh(geo, glowMaterial(this.addTex));
     // The character billboard is renderOrder 1, so it draws over these (default 0).
     this.meshes = [this.normMesh, this.addMesh];
     scene.add(this.normMesh, this.addMesh);
@@ -169,20 +156,18 @@ export class EffectBillboard {
 
   /** Redraw the effect at time `timeSec`, then place/orient both planes so the STR
    *  feet anchor lands on `feet`, facing the camera. */
-  update(timeSec: number, feet: Vector3, camera: PerspectiveCamera): void {
+  update(timeSec: number, feet: Vector3, camera: Camera): void {
     const { fps, maxKey } = this.effect;
     const keyIndex = maxKey > 0 ? (timeSec * fps) % maxKey : 0;
 
     this.normCtx.clearRect(0, 0, this.cw, this.ch);
     // The additive canvas starts OPAQUE BLACK, not cleared to transparent.
-    // `lighter` adds alpha as well as colour, so on a transparent canvas every
-    // quad accumulates its whole RECTANGLE into the alpha channel — the texture
-    // is opaque black-background art, so alpha 255 everywhere it is drawn. The
-    // canvas then uploads as a texture whose alpha is a set of hard-edged boxes,
-    // and the unpremultiply on upload turns those into the visible rectangular
-    // patches around an effect (reported on Camélia). Black is the identity for
-    // this plane's ONE/ONE blend, so a black ground costs nothing and keeps the
-    // alpha uniform.
+    // `lighter` adds alpha as well as colour, and the glow textures are opaque
+    // black-background art, so on a transparent canvas every quad would
+    // accumulate its whole RECTANGLE into the alpha channel. Black is the
+    // identity for this plane's additive blend, so a black ground costs nothing
+    // and keeps the alpha uniform; the coverage the transparent overlay needs is
+    // derived from the colour in the shader instead (glowMaterial.ts).
     this.addCtx.globalCompositeOperation = "source-over";
     this.addCtx.fillStyle = "#000";
     this.addCtx.fillRect(0, 0, this.cw, this.ch);
@@ -200,7 +185,12 @@ export class EffectBillboard {
       ctx.globalCompositeOperation = s.additive ? "lighter" : "source-over";
       ctx.translate(s.cx - this.winMinX, s.cy - this.winMinY);
       if (s.angle) ctx.rotate((-s.angle * Math.PI) / 180);
-      ctx.drawImage(tinted(tex, s.tint[0], s.tint[1], s.tint[2]), -s.w / 2, -s.h / 2, s.w, s.h);
+      // Glow layers go through glowSource, which pulls a dark-grey black point
+      // down to real black so the quad adds nothing outside the glow.
+      const art = s.additive
+        ? glowSource(tex, s.tint[0], s.tint[1], s.tint[2])
+        : tinted(tex, s.tint[0], s.tint[1], s.tint[2]);
+      ctx.drawImage(art, -s.w / 2, -s.h / 2, s.w, s.h);
       ctx.restore();
       if (s.additive) drewAdd = true;
       else drewNorm = true;

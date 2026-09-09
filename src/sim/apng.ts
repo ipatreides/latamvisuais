@@ -28,6 +28,19 @@ export async function fetchApngInfo(url: string): Promise<ApngInfo> {
  *  (probe failed) — a reasonable RO-ish frame interval. */
 export const DEFAULT_FRAME_DELAY = 0.15;
 
+/** How long one pass through the animation takes, in the same units as the
+ *  delays. Falls back to the uniform delay when the real ones are unknown, so a
+ *  caller sizing a scrubber gets the same length playback will actually take. */
+export function loopLength(info: ApngInfo): number {
+  if (info.count <= 1) return 0;
+  if (info.delays.length !== info.count) {
+    return info.count * (info.delays[0] || DEFAULT_FRAME_DELAY);
+  }
+  let total = 0;
+  for (const d of info.delays) total += d;
+  return total;
+}
+
 /** Frame index to show at elapsed time `clock`, replicating native APNG looping:
  *  each frame is held for its own delay, then the sequence repeats. Falls back to
  *  a uniform delay when per-frame delays are missing. */
@@ -38,8 +51,7 @@ export function frameAt(clock: number, info: ApngInfo): number {
     const d = info.delays[0] || DEFAULT_FRAME_DELAY;
     return Math.floor(clock / d) % n;
   }
-  let total = 0;
-  for (const d of info.delays) total += d;
+  const total = loopLength(info);
   if (total <= 0) return 0;
   let t = clock % total;
   for (let f = 0; f < n; f++) {

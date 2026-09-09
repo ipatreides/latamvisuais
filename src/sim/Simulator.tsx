@@ -23,6 +23,7 @@ import { SpriteBillboard } from "./render/spriteBillboard";
 import { disposeBundle, loadSpriteBundle, type SpriteBundle } from "./spriteEffect";
 import { WorldEffects } from "./render/worldEffects";
 import { loadEffect, type LoadedEffect } from "./effect";
+import { builtinOf, effectKeys } from "./equipped";
 import { CursorAnimator } from "./cursor";
 import { loadImage } from "./imageCache";
 import { buildWorld, type MapManifest, type World } from "./render/scene";
@@ -254,35 +255,22 @@ export default function Simulator({ onClose }: { onClose: () => void }) {
     // costumes the paper-doll can't draw). Rebuild the in-scene billboards
     // whenever the equipped effects change; each loads its assets async.
     let effects: EffectBillboard[] = [];
-    let effectKeys = "";
+    let playedKeys = "";
     let lastState: State | null = null;
     let effectToken = 0;
     const clearEffects = () => {
       for (const e of effects) e.dispose();
       effects = [];
     };
-    const desiredEffectKeys = (st: State): string[] => {
-      const keys: string[] = [];
-      for (const slot of SLOTS) {
-        // Both layers draw the same way: an effect-only costume and the graphic
-        // stone enchanted into that position are each a ".str" bundle played on
-        // the character. A stone whose effect ragassets hasn't shipped has no
-        // key and simply contributes nothing.
-        for (const key of [st.equipped[slot]?.effect, st.enchants[slot]?.effect]) {
-          if (key && !keys.includes(key)) keys.push(key);
-        }
-      }
-      return keys;
-    };
     const syncEffects = (st: State) => {
       // State only changes on dispatch; skip the per-frame recompute while the
       // build is unchanged (the walker/camera don't touch React state).
       if (st === lastState) return;
       lastState = st;
-      const keys = desiredEffectKeys(st);
+      const keys = effectKeys(st);
       const joined = keys.join(",");
-      if (joined === effectKeys) return;
-      effectKeys = joined;
+      if (joined === playedKeys) return;
+      playedKeys = joined;
       clearEffects();
       const token = ++effectToken;
       for (const key of keys) {
@@ -361,13 +349,6 @@ export default function Simulator({ onClose }: { onClose: () => void }) {
       builtinSprite = null;
       if (builtinBundle) disposeBundle(builtinBundle);
       builtinBundle = null;
-    };
-    const builtinOf = (st: State): BuiltinEffect | null => {
-      for (const slot of SLOTS) {
-        const b = st.enchants[slot]?.builtin;
-        if (b) return b;
-      }
-      return null;
     };
     const syncBuiltin = (st: State) => {
       builtin = builtinOf(st);

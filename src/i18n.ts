@@ -98,6 +98,10 @@ export const t = {
   play: "Reproduzir",
   pause: "Pausar",
   frameLabel: "Quadro",
+  effectTimeLabel: "Efeito",
+  zoomIn: "Aproximar",
+  zoomOut: "Afastar",
+  zoomReset: "Voltar ao tamanho que cabe",
   framePrev: "Quadro anterior",
   frameNext: "Próximo quadro",
 
@@ -166,13 +170,6 @@ export const t = {
   stoneFootprintShort: "pegada",
 
   catalogTitle: "Visuais",
-  catalogInfoLabel: "Sobre os visuais disponíveis",
-  catalogInfoText:
-    "Visuais de efeito (auras, brilhos, climas e afins) não usam o sprite 2D do " +
-    "personagem. Eles aparecem na lista, mas só são exibidos na visão de mapa, " +
-    "não na pré-visualização. O mesmo vale para as pedras gráficas, que são " +
-    "encantes colocados dentro de um visual e não substituem nada.",
-  effectOnlyNote: "Só aparece no mapa",
   searchPlaceholder: "Buscar por nome ou ID…",
   allSlots: "Todos",
   itemCount: (n: number) => (n === 1 ? "1 item" : `${n} itens`),

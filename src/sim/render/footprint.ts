@@ -16,15 +16,11 @@
 // only draws where it is told.
 
 import {
-  AddEquation,
   CanvasTexture,
-  CustomBlending,
   Euler,
   LinearFilter,
   Mesh,
   MeshBasicMaterial,
-  NormalBlending,
-  OneFactor,
   type PerspectiveCamera,
   PlaneGeometry,
   type Scene,
@@ -34,7 +30,8 @@ import {
 import { UNITS_PER_PX } from "../sprite";
 import { type LoadedEffect, sampleLayer } from "../effect";
 import { contentBounds, EffectBillboard } from "./effect";
-import { tinted } from "./tint";
+import { alphaMaterial, glowMaterial } from "./glowMaterial";
+import { glowSource, tinted } from "./tint";
 import type { FootprintSteps } from "../../core/db";
 
 // The STR anchor that lands on the footstep. Footprint .str author their mark
@@ -131,21 +128,9 @@ export class FootprintDecal {
     this.geo = new PlaneGeometry(this.cw * px, this.ch * px);
     const normMesh = new Mesh(
       this.geo,
-      new MeshBasicMaterial({ map: this.normTex, transparent: true, depthWrite: false, blending: NormalBlending, fog: false }),
+      alphaMaterial(this.normTex),
     );
-    const addMesh = new Mesh(
-      this.geo,
-      new MeshBasicMaterial({
-        map: this.addTex,
-        transparent: true,
-        depthWrite: false,
-        blending: CustomBlending,
-        blendSrc: OneFactor,
-        blendDst: OneFactor,
-        blendEquation: AddEquation,
-        fog: false,
-      }),
-    );
+    const addMesh = new Mesh(this.geo, glowMaterial(this.addTex));
     this.meshes = [normMesh, addMesh];
 
     // Lay the plane flat and yaw it to the walk heading. Order YXZ so the yaw
@@ -194,14 +179,12 @@ export class FootprintDecal {
     const keyIndex = this.effect.fps > 0 ? this.age * this.effect.fps : 0;
     this.normCtx.clearRect(0, 0, this.cw, this.ch);
     // The additive canvas starts OPAQUE BLACK, not cleared to transparent.
-    // `lighter` adds alpha as well as colour, so on a transparent canvas every
-    // quad accumulates its whole RECTANGLE into the alpha channel — the texture
-    // is opaque black-background art, so alpha 255 everywhere it is drawn. The
-    // canvas then uploads as a texture whose alpha is a set of hard-edged boxes,
-    // and the unpremultiply on upload turns those into the visible rectangular
-    // patches around an effect (reported on Camélia). Black is the identity for
-    // this plane's ONE/ONE blend, so a black ground costs nothing and keeps the
-    // alpha uniform.
+    // `lighter` adds alpha as well as colour, and this is opaque
+    // black-background art, so on a transparent canvas every quad would
+    // accumulate its whole RECTANGLE into the alpha channel. Black is the
+    // identity for an additive blend, so a black ground costs nothing and keeps
+    // the alpha uniform; the coverage a transparent surface needs is derived
+    // from the colour in the shader instead (glowMaterial.ts).
     this.addCtx.globalCompositeOperation = "source-over";
     this.addCtx.fillStyle = "#000";
     this.addCtx.fillRect(0, 0, this.cw, this.ch);
@@ -216,7 +199,12 @@ export class FootprintDecal {
       ctx.globalCompositeOperation = s.additive ? "lighter" : "source-over";
       ctx.translate(s.cx - this.winMinX, s.cy - this.winMinY);
       if (s.angle) ctx.rotate((-s.angle * Math.PI) / 180);
-      ctx.drawImage(tinted(tex, s.tint[0], s.tint[1], s.tint[2]), -s.w / 2, -s.h / 2, s.w, s.h);
+      // Glow layers go through glowSource, which pulls a dark-grey black point
+      // down to real black so the quad adds nothing outside the glow.
+      const art = s.additive
+        ? glowSource(tex, s.tint[0], s.tint[1], s.tint[2])
+        : tinted(tex, s.tint[0], s.tint[1], s.tint[2]);
+      ctx.drawImage(art, -s.w / 2, -s.h / 2, s.w, s.h);
       ctx.restore();
     }
     this.normTex.needsUpdate = true;

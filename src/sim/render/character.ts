@@ -22,12 +22,9 @@ import {
   SRGBColorSpace,
   Vector3,
 } from "three";
+import type { CanvasMetrics } from "../../core/state";
 import { SPRITE, UNITS_PER_PX } from "../sprite";
-
-/** The render-canvas metrics a billboard needs: the sprite sheet's pixel size and
- *  the origin (ground/feet point) within it. The character uses SPRITE; the pet
- *  passes its own (larger) PET_SPRITE — see sim/pets.ts. */
-export type SpriteMetrics = { w: number; h: number; anchorX: number; anchorY: number };
+import { measureTopOffset } from "./measureTop";
 
 // The flat sprite shares the feet's depth, so the ground tiles in front of the
 // feet (nearer the camera) would overdraw its lower edge (boots sit just below
@@ -43,7 +40,7 @@ export class Character {
   private texture: CanvasTexture;
   private up = new Vector3();
   private toCam = new Vector3();
-  private metrics: SpriteMetrics;
+  private metrics: CanvasMetrics;
   private anchorOffset: number;
   /** Uniform size factor — 1 normally; the Miniatura graphic stone halves it
    *  (the client's EF 421 sets the entity's xSize/ySize to 2.5 against a default
@@ -60,7 +57,7 @@ export class Character {
 
   constructor(
     private scene: Scene,
-    metrics: SpriteMetrics = SPRITE,
+    metrics: CanvasMetrics = SPRITE,
   ) {
     this.metrics = metrics;
     const worldW = metrics.w * UNITS_PER_PX;
@@ -122,29 +119,13 @@ export class Character {
   }
 
   /** The topmost opaque row of a frame, as a world-up offset from the feet.
-   *  Read once per distinct frame image and cached: `getImageData` is a sync
-   *  readback, far too slow to run every frame, but a given frame's silhouette
-   *  never changes. */
+   *  Read once per distinct frame image and cached: the scan is a sync
+   *  `getImageData` readback, far too slow to run every frame, but a given
+   *  frame's silhouette never changes. */
   private measureTop(key: string): number {
     const hit = this.topByFrame.get(key);
     if (hit !== undefined) return hit;
-    const { w, h, anchorY } = this.metrics;
-    let row = anchorY;
-    try {
-      const data = this.ctx.getImageData(0, 0, w, h).data;
-      for (let y = 0; y < anchorY; y++) {
-        let any = false;
-        for (let x = 0; x < w; x++) {
-          if (data[(y * w + x) * 4 + 3] > 8) { any = true; break; }
-        }
-        if (any) { row = y; break; }
-      }
-    } catch {
-      // Tainted or unreadable canvas — fall back to the feet, so a head-anchored
-      // effect sits low rather than the frame throwing.
-      row = anchorY;
-    }
-    const offset = (anchorY - row) * UNITS_PER_PX;
+    const offset = measureTopOffset(this.ctx, this.metrics);
     this.topByFrame.set(key, offset);
     return offset;
   }

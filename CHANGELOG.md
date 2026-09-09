@@ -4,6 +4,237 @@ All notable changes to this project are documented here. The format is loosely
 based on [Keep a Changelog](https://keepachangelog.com/); versioning is informal
 while pre-1.0.
 
+## [0.15.0] — 2026-09-09
+
+World effects on the 2D character preview. Auras, falling petals and the
+built-in hat effects are drawn by the game's world-effect system, never by a
+character sprite, so ragassets can't composite them into the paper-doll render
+at any resolution. They now come from a transparent WebGL canvas *behind* the
+paper-doll — the same billboards the map simulator plays, anchored on the
+character's feet. The `<img>` is untouched: it just draws on top, which is also
+how the simulator layers the two (its character billboard is `renderOrder` 1 and
+rides a larger `FRONT_BIAS` than every effect).
+
+### Added
+
+- **`src/sim/render/stageEffects.ts`** — `StageEffects`, a small renderer that
+  owns a transparent `WebGLRenderer`, an orthographic camera and its own frame
+  loop, and drives the existing `EffectBillboard` / `SpriteBillboard`. Not built
+  on `Engine`: that owns a perspective follow-camera and an opaque sky, both the
+  opposite of what a preview overlay wants.
+
+  It is behind a dynamic `import()` (`src/hooks/useStageEffects.ts`), taken only
+  once a build actually draws something, so three.js stays out of the first load
+  — verified: an effect-free build fetches neither the chunk nor three.
+
+- **`src/sim/render/stageLayout.ts`** — the geometry, as one pure function.
+  Because the preview renders on a FIXED canvas, the character's ground point is
+  a known pixel, and an orthographic frustum can be built so that world (0,0,0)
+  projects exactly onto it:
+
+  ```
+  perPx  = UNITS_PER_PX / scale        // scale = CSS px per sprite px
+  left   = -groundX * perPx            right  = (cssW - groundX) * perPx
+  top    =  groundY * perPx            bottom = -(cssH - groundY) * perPx
+  ```
+
+  The frustum carries the offset instead of the camera, so world origin *is* the
+  feet — which is what `EffectBillboard` anchors its STR (320, 240) reference to
+  — and one sprite pixel is exactly `scale` CSS pixels, so an effect comes out at
+  the same size relative to the character as it does on the map. Measured in the
+  browser: 370 px stage → `perPx` 0.019151, ground at (185, 274.4) = (124, 184) ×
+  1.4919. Exact.
+
+- **`src/sim/equipped.ts`** — `effectKeys` / `builtinOf` lifted out of
+  `Simulator.tsx`, plus `drawsEffects`. The map and the preview now share one
+  definition of what a build should be playing rather than keeping two.
+
+- **`src/core/alphaBounds.ts`** — the box of drawn pixels in an RGBA buffer, and
+  whether it reaches an edge. Used by the viewer's measuring pass.
+
+### Changed
+
+- **The full-sprite viewer renders anchored, not auto-cropped.** It used to pass
+  no `canvas` at all and let ragassets crop to the sprite's true bounds, but a
+  cropped image has no knowable origin and the overlay needs one. It now renders
+  on `MODAL_CANVAS_METRICS` (320×320+160+256) and shows a *window* into it,
+  measured per build, so the framing stays as tight as the crop was:
+
+  - the auto-cropped renders still give each direction's content size over the
+    whole animation (ragassets crops an APNG to the union of its frames), which
+    is the lower bound on the window;
+  - the anchored renders are composited into one canvas and scanned once, giving
+    the union box across every body/head direction — where the content sits
+    relative to the feet, which no auto-crop can tell us;
+  - a box that reaches the canvas edge means the costume was clipped, so it
+    re-renders at `MODAL_GROWTH`× rather than showing a cut-off sprite. That
+    replaces the "pick a big enough constant" guess with something self-checking.
+    Swept to check it never has to fire: over all 1191 drawable costumes in the
+    idle and dead poses (the tallest and the widest), the largest content box is
+    **260×237** — Avante! Ninja Team! — against a 320×320 canvas, and nothing
+    else passes 165 wide or 180 tall.
+  - with no pixel reading available, it falls back to placing a max-sized window
+    on the feet via `ACTION_BELOW_ORIGIN`, the table the action icons already use.
+
+  Side effect, and an improvement: the character is now framed by its feet rather
+  than centred, so it stops shifting inside the box on every rotation. Downloads
+  still render uncropped — a saved file wants no padding.
+
+- **The floating window keeps its size in `frozenBox`**, so the measuring pass
+  can keep running while detached (the window has to follow the build for the
+  effects to stay on the feet) without the box resizing under the user's hands.
+  A build whose window outgrows it shrinks to fit, as before.
+
+- **Glow planes now declare their coverage** (`src/sim/render/glowMaterial.ts`).
+  Third of the family after the two `.str` bugs fixed in 0.14.0, and the one
+  only a transparent surface could expose.
+
+  Glow art is light painted on an opaque black field: the black means "add
+  nothing", not "cover what is behind". The plane adds its colour to the scene
+  and the black contributes zero, which is the whole story as long as the scene
+  is opaque, as the map's is. On the preview's transparent overlay it is not: a
+  pixel that adds colour has to declare the coverage that colour implies, and
+  colour without coverage is not a valid premultiplied pixel. Measured on the
+  drawing buffer before the fix, every lit pixel was `maxRGB 251` against
+  `maxA 0`.
+
+  The coverage is `max(r, g, b)` of the pixel being written, and it is taken in
+  the fragment shader, right after the output colour-space conversion. That
+  placement is the point: alpha is not colour-managed, so brightness moved out
+  of an sRGB-encoded channel and into a linear one comes back many times too
+  bright. Precomputing it in the texture — the first attempt — did exactly that,
+  turning each glow texture's near-black margin into a saturated hard-edged box
+  (Espírito de Influência: a pixel that should read `(7, 8, 6)` came out
+  `(170, 255, 212)`). Read off the final fragment it cannot drift from the
+  colour it describes, and the RGB written to the framebuffer is untouched, so
+  the map renders exactly as before.
+
+  Swept all 36 served bundles afterwards (24 effect costumes, 12 stones): zero
+  pixels with RGB above alpha, against every lit pixel before. On the reported
+  effect the largest neighbouring-column step across the glow is now 4% of its
+  peak — a gradient, not an edge. `FootprintDecal` carries the same compositing
+  and now shares the material.
+
+- **Glow textures are made to actually reach black at their own edge**
+  (`glowSource` in `src/sim/render/tint.ts`). The other half of the boxes, and
+  the half that is in the artwork rather than in the compositing.
+
+  Additive art is supposed to be light on black, where the black adds nothing.
+  Some of it is not. `ros_redspirit`'s sphere sits on a flat `(7, 6, 7)` and its
+  halo on `(11, 11, 11)`, fully opaque, with no alpha channel at all — and even
+  with that pedestal removed, the glow is a radial falloff that runs out of
+  texture while still at 1 to 4. Added to the scene, neither is "nothing": each
+  leaves a uniform lift across the layer's whole quad, and a quad's edge is a
+  straight line. Over a map you would never catch it. Over the preview's flat
+  dark stage it is a faint hard-edged rectangle around the effect.
+
+  Two steps, both confined to what the art gets wrong. The pedestal is subtracted,
+  taken as the per-channel minimum around the border — the conservative estimate,
+  since a texture with even one black border pixel loses nothing — and measured
+  after the tint, which scales the pedestal along with everything else. Then what
+  is left is ramped to zero across the outermost 6% of the shorter side, so the
+  glow reaches the quad's edge at nothing whatever the art does. That turns the
+  estimate into a guarantee.
+
+  After: the glow canvas is exactly zero across 89% of its area, and its largest
+  local step is the flame's own outline (252 → 137, mid-artwork), not a boundary.
+
+- `Character.measureTop` moved to **`src/sim/render/measureTop.ts`** so the
+  overlay can take the same reading of the drawn sprite for head-anchored
+  effects; `Character` keeps its per-frame cache.
+
+- `CANVAS` became `CANVAS_METRICS` + `canvasSpec()`, so the anchor is data rather
+  than a substring of a string.
+
+- Miniatura's resize is a CSS `transform` on the paper-doll with
+  `transform-origin` at the render canvas' origin, so the feet stay on the
+  ground. It is the one built-in that draws nothing of its own, so a build
+  carrying only Miniatura takes no canvas and no three.js.
+
+- **The affordances that existed to explain the absence are gone.** The
+  catalogue's "?" and its paragraph about effects not reaching the preview, and
+  the map glyph on every effect costume and every stone — all of it described
+  something the reader can now simply look at.
+
+  What is left says it in words, and only where there is still something
+  unseeable. `StoneMark` became `StoneNote`: "pegada" for a footprint, which is
+  stamped per step and so appears only in the map view, and "sem prévia" for a
+  stone nothing can draw, each carrying its full reason on hover. A stone that
+  simply draws says nothing at all. `effectOnlyNote`, `catalogInfoText` and the
+  `.slot-effect` rules are deleted.
+
+- **Pausing stops two clocks, so it offers two scrubbers.** The effects are a
+  separate animation that happens to be playing alongside the sprite, on a clock
+  of their own, and holding one still says nothing about the other. The playback
+  row gains a second slider, labelled "Efeito", whenever the build has an effect
+  and the preview is paused.
+
+  One slider for all of them rather than one each: they already share a clock
+  while playing, each wrapping at its own rate, so scrubbing that clock shows
+  exactly the combinations that really occur — per-effect scrubbers would let a
+  reader build frames the game never produces. Its span is the longest loop in
+  play (`StageEffects` reports it as the set loads), so every effect completes at
+  least once. `pause()` reads the overlay's clock on the way in, which is why the
+  slider opens under what is already on screen rather than jumping to zero, and
+  the seeded time is pushed to both overlays so the stage and the viewer stay on
+  the same frame.
+
+- **The viewer is a fixed frame with content that scales inside it.** Two things
+  follow from that, both asked for:
+
+  The **effect overlay spans the whole box**, gutters included, rather than being
+  clipped to the character's own window. An aura is not part of the character and
+  has no business being cut at its edge; it now draws behind the arrows and the
+  buttons, as it would in the game.
+
+  A **zoom control** sits in the bottom-right corner: −, a percentage, +. The
+  percentage doubles as a reset to the measured fit. It scales the paper-doll and
+  the effect together, so zooming out is what brings a cropped effect into view.
+  Both are clipped by the box and by nothing else: the inner frame sizes the
+  content but does not cut it, or zooming in would crop away the very pixels you
+  zoomed in to see while the effect around them carried on into the gutters.
+  It is deliberately separate from the floating window's own zoom, which sizes
+  the frame: one is the reader's magnification, the other is the window's size.
+  The detached window's shrink-to-fit is gone with it — a build that outgrows the
+  frame is now clipped, and zooming out is the answer.
+
+- **The magnifier is gone.** It was a circular lens that followed the cursor,
+  showing the sprite at a further 1.5×, and the zoom control does the same job
+  over the whole picture instead of a coin-sized patch of it. Keeping both would
+  have meant two answers to "look closer" — and the lens was the worse one, since
+  it magnified a CSS background of the character render alone and had no way to
+  show an effect at all without an entire overlay of its own.
+
+- **The floating window resizes freely.** The drag used to derive one scale
+  factor from the corner's travel and apply it to both axes, which held the
+  window's shape but let the corner slide away from the cursor on anything but a
+  45-degree drag. The shape was never the thing worth preserving: the CONTENT
+  keeps its proportions regardless, because it is centred in the frame and
+  scaled by the zoom control rather than stretched to fill. Width and height are
+  now independent, floored at 120px each.
+
+- **The preview panel scrolls rather than shrinking the stage.** The stage used
+  to be the one part that gave, shrinking toward the render canvas' own size
+  before the panel scrolled — so the effect scrubber appearing was enough to
+  shrink the character. A preview whose subject changes size when a control
+  shows up is worse than one that scrolls.
+
+- **The full-sprite viewer waits for its size before it appears.** It used to
+  open the instant it was asked and let the measuring pass catch up, so the
+  first open flashed a box collapsed to its padding with the arrows, the close
+  button and the download button stacked on each other. The box is now not
+  rendered until the measurement resolves, with the loading line in its place,
+  and the settle debounce is skipped on the way in — there is nothing to settle
+  before anything has been shown, and the wait would be dead time on a blank
+  viewer.
+
+### Known limits
+
+- Footprints stay map-only: the client stamps them per footstep and the preview
+  character never walks.
+- The overlay is clipped by the surface it draws on. A costume aura fits the
+  stage comfortably; an outsized built-in (Espaço Digital) touches the top edge.
+
 ## [0.14.0] — 2026-09-02
 
 Graphic stones ("Pedras Gráficas") — the visual-enchant stones from Malangdo's

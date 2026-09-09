@@ -357,12 +357,13 @@ body {
   .panel {
     max-height: 100%;
   }
-  /* Pinned to the viewport here, the preview panel hands its slack to the stage
-     — the one part that can give — so a short window shrinks the character
-     instead of scrolling the whole panel. The stage keeps its aspect ratio while
-     shrinking (the wrapper drives the width, so the rotation arrows pinned to it
-     stay aligned). Only once the stage hits its floor does the panel scroll, as
-     it did before. */
+  /* Pinned to the viewport here, the preview panel scrolls rather than squeezing
+     anything. The stage used to be the one part that gave, shrinking toward the
+     render canvas' own size before the panel scrolled — but that made the
+     character's size depend on what else happened to be on screen below it, and
+     the effect scrubber appearing was enough to shrink it. A preview whose
+     subject changes size when a control shows up is worse than one that
+     scrolls. */
   .panel-preview {
     overflow-y: auto;
   }
@@ -370,27 +371,10 @@ body {
     flex: 1 1 auto;
     min-height: 0;
   }
-  /* Everything below the stage keeps its natural height — shrinking the action
-     picker or the mount toggle would clip them, not scale them. */
+  /* Nothing gives: shrinking the action picker or the mount toggle would clip
+     them rather than scale them, and the stage now holds its size too. */
   .panel-preview .preview > * {
     flex: none;
-  }
-  .panel-preview .stage-wrap {
-    /* Basis = the natural stage height (372px wide at the canvas' 248:232). */
-    flex: 0 1 348px;
-    /* Floor = the render canvas' own 232px height, i.e. 1× instead of the 1.5×
-       the stage normally shows. Shrinking to there only undoes the upscale;
-       going below it would resample the sprite under its native resolution, so
-       past this point the panel scrolls instead. */
-    min-height: 232px;
-    aspect-ratio: 248 / 232;
-    width: auto;
-    max-width: 372px;
-  }
-  .panel-preview .stage {
-    width: 100%;
-    height: 100%;
-    aspect-ratio: auto;
   }
   /* The appearance panel is a flex column whose hair grid is the one flexible
      region — it shrinks and scrolls internally when the window is short, so
@@ -1154,12 +1138,30 @@ button:disabled {
   overflow: hidden;
 }
 
+/* Effect overlay: the .str auras and built-in effects the character render can
+   never contain, drawn behind the paper-doll (which is how the map layers them
+   too). Transparent, so the stage's gradient shows through. */
+.stage-fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 .stage-sprite {
   width: 100%;
   height: 100%;
   object-fit: contain;
   image-rendering: pixelated;
   opacity: 0;
+  /* Above .stage-fx, which is positioned and would otherwise paint over this. */
+  position: relative;
+  z-index: 1;
+  /* transform-origin is set in JS from the render canvas' own anchor — the
+     character's feet — so the Miniatura stone scales the sprite about the point
+     it stands on. Deriving it here would be the same number written twice, in a
+     file that cannot see when the canvas changes. */
 }
 
 .stage-sprite.is-loaded {
@@ -1242,26 +1244,108 @@ button:disabled {
   display: none;
 }
 
+/* Shown in place of the box while the measuring pass resolves a size. The box
+   is not rendered until then: unsized, it collapses to its padding and stacks
+   the arrows and buttons on top of each other. */
+.sprite-modal-wait {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.85rem;
+}
+
 .sprite-modal-box {
   position: relative;
   max-width: 90vw;
   max-height: 86vh;
-  overflow: auto;
+  /* The frame is fixed and the content scales inside it, so nothing here ever
+     needs to scroll — what doesn't fit is what the zoom control is for. */
+  overflow: hidden;
   background:
     radial-gradient(ellipse 40% 14% at 50% 88%, rgba(70, 60, 90, 0.16), transparent 70%),
     linear-gradient(180deg, #fdfbff, #ebe8f3);
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-  /* Extra horizontal padding leaves room for the rotation arrows flanking the
-     sprite without letting them overlap it. */
-  padding: 1.5rem 3.75rem;
-  /* Sized explicitly (JS sets width/height to the max sprite bbox × scale so
-     rotation doesn't jump the frame); read those values as content-only so the
-     padding stays additive and the sprite has its full computed area. */
+  /* Gutters (set in JS, which also needs their size to place the overlay) leave
+     room for the rotation arrows without letting them overlap the character.
+     The window inside carries the explicit size, so this box sizes to it and
+     the gutters stay additive. */
   box-sizing: content-box;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* The frame the character is drawn into: it holds its size while the content
+   scales inside it, which is what makes zooming change anything. It does NOT
+   clip — the box does, the same edge the effect overlay reaches to. Clipping
+   here would cut the character at its own window while the effect around it
+   carried on into the gutters, so zooming in would crop the very pixels you
+   zoomed in to see. */
+.sprite-modal-window {
+  position: relative;
+  flex: none;
+}
+
+/* Across the WHOLE box, gutters included: an effect is not part of the
+   character's own window and must not be cut at its edge. Behind everything,
+   as on the stage. */
+.sprite-modal-fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Content zoom, bottom right. The readout doubles as the reset. */
+.sprite-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: rgba(20, 18, 28, 0.55);
+}
+
+/* Clear of the resize grip, which lives in the same corner. */
+.sprite-zoom.is-detached {
+  right: 30px;
+}
+
+.sprite-zoom-btn,
+.sprite-zoom-level {
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.9);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.sprite-zoom-btn {
+  font-size: 1rem;
+  width: 22px;
+}
+
+.sprite-zoom-level {
+  font-size: 0.72rem;
+  min-width: 42px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sprite-zoom-btn:hover:not(:disabled),
+.sprite-zoom-level:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.sprite-zoom-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 /* Rotation arrows in the full-sprite modal: same sprites as the stage, but
@@ -1281,32 +1365,13 @@ button:disabled {
 }
 
 .sprite-modal-img {
-  /* RO sprites are tiny pixel art — kept crisp; the size is set in JS to fit
-     the viewport (see preview.ts). */
+  /* RO sprites are tiny pixel art — kept crisp; the size and offset are set in
+     JS, which places the render canvas so its drawn pixels fill the window. */
   image-rendering: pixelated;
   display: block;
-}
-
-/* Hide the cursor while the loupe is up — the lens itself marks the focus. */
-.sprite-modal-img.is-magnifying {
-  cursor: none;
-}
-
-/* Magnifier loupe: a circular popover that follows the cursor over the modal
-   sprite, showing that region magnified further (the background image is the
-   same sprite, scaled up and offset so the pixels line up under the cursor).
-   pointer-events:none so mousemove keeps firing on the sprite underneath. */
-.sprite-loupe {
-  position: fixed;
-  z-index: 110;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-  background-color: #fdfbff;
-  background-repeat: no-repeat;
-  image-rendering: pixelated;
+  position: absolute;
+  z-index: 1;
+  /* transform-origin comes from JS with the anchor — see .stage-sprite. */
 }
 
 /* Modal close — the game's close-button sprite (17x16), with its own over/press
@@ -1359,7 +1424,8 @@ button:disabled {
   max-height: none;
   pointer-events: auto;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-  /* Nothing to scroll: the sprite is scaled to fit the window instead. */
+  /* Nothing to scroll: the content is centred in the window and clipped by
+     it, and the zoom control is what brings the rest into view. */
   overflow: hidden;
 }
 
@@ -1857,6 +1923,19 @@ button:disabled {
   cursor: pointer;
 }
 
+/* The effects' own timeline, on its own row under the sprite's. They are two
+   different animations that happen to be playing together, so pausing has to
+   hold each still on its own. */
+.playback-fx {
+  gap: 0.5rem;
+}
+
+.playback-label {
+  flex: none;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 /* ---- wishlist (equipped-items shopping list) ------------------------------- */
 
 .panel-header {
@@ -2120,30 +2199,6 @@ button:disabled {
   color: var(--fg);
 }
 
-/* Marks an equipped effect costume (aura, petals, …): it has no character sprite,
-   so it only renders in the map view, not the 2D preview. A small map glyph with
-   a "Só aparece no mapa" tooltip. */
-.slot-effect {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent);
-}
-
-.slot-effect svg {
-  width: 15px;
-  height: 15px;
-}
-
-/* A graphic stone whose effect the client keeps in its own code, with no file to
-   extract: it can't be drawn anywhere, not even on the map. Same glyph as the
-   map marker above, dimmed — lit means "the map shows this". */
-.slot-effect.is-unavailable {
-  color: var(--muted);
-  opacity: 0.55;
-}
-
 /* ---- the graphic stone enchanted into the slot's costume ----
    A second, quieter line under the costume: same layout, smaller type and a
    rule above it, so it reads as something attached to the costume rather than
@@ -2164,11 +2219,6 @@ button:disabled {
   object-fit: contain;
   image-rendering: pixelated;
   flex: none;
-}
-
-.slot-stone .slot-effect svg {
-  width: 13px;
-  height: 13px;
 }
 
 .slot-stone-name {

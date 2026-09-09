@@ -12,12 +12,12 @@
 
 import {
   AddEquation,
+  type Camera,
   CustomBlending,
   Mesh,
   MeshBasicMaterial,
   NormalBlending,
   OneFactor,
-  type PerspectiveCamera,
   PlaneGeometry,
   type Scene,
   SrcAlphaFactor,
@@ -76,9 +76,19 @@ export class SpriteBillboard {
       depthWrite: false,
       fog: false, // foreground particle RO never fogs
       // Additive glow (flames/fireworks): keep colour vivid over the dark scene
-      // instead of straight alpha desaturating it toward the background.
+      // instead of straight alpha desaturating it toward the background. Alpha
+      // accumulates alongside colour, for the same reason EffectBillboard's glow
+      // plane does — see the note there; src=SRC_ALPHA already keeps what is
+      // added to RGB within what is added to alpha.
       ...(this.opts.additive
-        ? { blending: CustomBlending, blendSrc: SrcAlphaFactor, blendDst: OneFactor, blendEquation: AddEquation }
+        ? {
+            blending: CustomBlending,
+            blendSrc: SrcAlphaFactor,
+            blendDst: OneFactor,
+            blendEquation: AddEquation,
+            blendSrcAlpha: OneFactor,
+            blendDstAlpha: OneFactor,
+          }
         : { blending: NormalBlending }),
     });
     const geo = new PlaneGeometry(this.maxW * UNITS_PER_PX * this.opts.scale, this.maxH * UNITS_PER_PX * this.opts.scale);
@@ -87,7 +97,7 @@ export class SpriteBillboard {
     this.scene.add(this.mesh);
   }
 
-  update(timeSec: number, pos: Vector3, camera: PerspectiveCamera, dyn?: SpriteDynamics): void {
+  update(timeSec: number, pos: Vector3, camera: Camera, dyn?: SpriteDynamics): void {
     this.ensure();
     if (!this.mesh || !this.mat) return;
     const fi = frameAt(timeSec * 1000, this.bundle.info);

@@ -14,6 +14,26 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.15.0",
+    date: "2026-09-09",
+    changes: [
+      "As auras, brilhos e efeitos agora aparecem na prévia do personagem, não só na visão de mapa. Equipe um visual de efeito ou uma pedra gráfica e ele é desenhado ali mesmo, atrás do personagem, do jeito que o jogo desenha: aos pés, no tamanho certo em relação ao boneco.",
+      "Vale para os três lugares em que o personagem aparece — o quadro da prévia, a tela cheia e a janelinha destacável. O botão de pausar segura o efeito junto com o personagem, e girar o corpo ou a cabeça, trocar de ação e usar a lupa continuam funcionando igual.",
+      "A Miniatura encolhe o personagem pela metade na prévia também, com os pés no mesmo lugar do chão.",
+      "As pegadas continuam só no mapa: o jogo as carimba no chão a cada passo, e na prévia o personagem não anda.",
+      "A tela cheia passou a enquadrar o personagem pelos pés em vez de centralizá-lo, então ele para de dar aquele pulinho a cada giro. O download da imagem continua saindo recortado justo, sem sobra em volta.",
+      "Sumiu o ícone de mapinha que ficava do lado dos visuais de efeito e das pedras, junto com o balãozinho dele, e o \"?\" do catálogo que explicava que efeito não aparecia na prévia. Os três existiam para avisar de uma coisa que não é mais verdade. No lugar do ícone ficou uma palavra, e só onde ainda há o que avisar: \"pegada\" nas que só aparecem andando pelo mapa, e \"sem prévia\" nas que ninguém consegue desenhar.",
+      "A tela cheia agora só aparece depois de saber o tamanho que vai ter. Antes ela abria na hora e ficava um instante toda amassada, com as setas e os botões empilhados em cima uns dos outros.",
+      "Na tela cheia, o efeito agora ocupa o quadro inteiro, inclusive atrás das setas e dos botões — ele não faz parte do desenho do personagem e não tem por que ser cortado na borda dele.",
+      "E tem um controle de zoom no canto de baixo à direita: − , a porcentagem, +. A porcentagem também serve de botão para voltar ao tamanho normal. O zoom aumenta e diminui o personagem e o efeito juntos, então dá para afastar e ver o efeito inteiro quando ele é maior que o quadro.",
+      "A lupa saiu de cena. Ela era um círculo que seguia o mouse mostrando um pedacinho ampliado; o controle de zoom faz a mesma coisa com a imagem inteira, então ter as duas era ter duas respostas para “quero ver de perto”.",
+      "E a janelinha destacável agora estica livre: largura e altura de forma independente, cada uma para onde você arrastar. Antes ela mantinha a proporção e o canto fugia do mouse. O personagem continua na proporção certa de qualquer jeito — quem muda o tamanho dele é o zoom, não a janela.",
+      "A barrinha do efeito não encolhe mais o quadro do personagem para caber: agora o painel rola, e o personagem fica do tamanho que sempre foi.",
+      "Com a prévia pausada, quem tem efeito equipado ganha uma segunda barrinha, a “Efeito”. São duas animações diferentes tocando ao mesmo tempo — a do personagem e a do efeito — e pausar precisa segurar cada uma no lugar por conta própria. A barra do efeito abre já no ponto em que ele estava quando você pausou.",
+      "Quem não tem nenhum efeito equipado não baixa nada a mais: a parte 3D só é carregada quando há realmente um efeito para mostrar.",
+    ],
+  },
+  {
     version: "0.14.0",
     date: "2026-09-09",
     changes: [

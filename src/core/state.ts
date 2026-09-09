@@ -21,16 +21,47 @@ export const RAGASSETS_BASE = "https://assets.latam-tools.com.br";
  *  extracts that don't change between renders, so they're left uncached-busted.) */
 export const CACHE_BUST = APP_VERSION;
 
-/** Fixed render canvas (WxH+anchorX+anchorY), identical for every state and
- *  direction so the sprite's feet stay put when rotating or switching poses:
- *  184px above the origin fits standing bodies plus the tall headgear/effect
- *  costumes (planets, balloons, walls — measured up to ~160px above the feet),
- *  48px below fits the poses that extend under the ground line (sit, dead), and
- *  124px each side fits the wide lying "dead" pose and broad wings. The CSS
- *  stage scales this 1.5× (see styles.css), so the character keeps its on-screen
- *  size — the larger canvas only adds head/side room. Anything still larger is
- *  the full-sprite modal's job (it renders uncropped). */
-export const CANVAS = "248x232+124+184";
+/** A render canvas: pixel size plus where the origin (the character's ground /
+ *  feet point) sits inside it. Fixing this is what lets anything be positioned
+ *  against the character — the effect overlay anchors its world origin on that
+ *  pixel (see sim/render/stageLayout.ts). */
+export type CanvasMetrics = { w: number; h: number; anchorX: number; anchorY: number };
+
+export const canvasSpec = (m: CanvasMetrics): string => `${m.w}x${m.h}+${m.anchorX}+${m.anchorY}`;
+
+/** Fixed render canvas, identical for every state and direction so the sprite's
+ *  feet stay put when rotating or switching poses: 184px above the origin fits
+ *  standing bodies plus the tall headgear/effect costumes (planets, balloons,
+ *  walls — measured up to ~160px above the feet), 48px below fits the poses that
+ *  extend under the ground line (sit, dead), and 124px each side fits the wide
+ *  lying "dead" pose and broad wings. The CSS stage scales this 1.5× (see
+ *  styles.css), so the character keeps its on-screen size — the larger canvas
+ *  only adds head/side room. */
+export const CANVAS_METRICS: CanvasMetrics = { w: 248, h: 232, anchorX: 124, anchorY: 184 };
+export const CANVAS = canvasSpec(CANVAS_METRICS);
+
+/** The full-sprite viewer's canvas. It used to render with no canvas at all,
+ *  letting ragassets crop to the sprite's true bounds — but a cropped image has
+ *  no knowable origin, and the effect overlay needs one. So it renders anchored,
+ *  like the stage, on a canvas generous enough for the costumes that overflow
+ *  the stage's (which is why the viewer rendered uncropped in the first place):
+ *  160px each side, 256 up, 64 down. The viewer then trims the empty margin back
+ *  off itself by measuring the drawn pixels, so the framing stays tight — and if
+ *  a costume ever reaches an edge it re-renders at MODAL_GROWTH× rather than
+ *  clipping. Downloads still render uncropped: a saved file wants no padding. */
+export const MODAL_CANVAS_METRICS: CanvasMetrics = { w: 320, h: 320, anchorX: 160, anchorY: 256 };
+
+/** Factor the viewer grows its canvas by when a costume reaches the edge. */
+export const MODAL_GROWTH = 2;
+
+export function grownCanvas(m: CanvasMetrics, factor: number): CanvasMetrics {
+  return {
+    w: m.w * factor,
+    h: m.h * factor,
+    anchorX: m.anchorX * factor,
+    anchorY: m.anchorY * factor,
+  };
+}
 
 /** Animation types offered by the simulator. With no weapon equipped the
  *  attack always resolves to ATTACK1 (type 5). Head rotation only applies to
@@ -335,10 +366,12 @@ export type RenderOverrides = {
   frame?: number;
   bodyDir?: number;
   headDir?: number;
-  /** A canvas string, or null to omit the param entirely — ragassets then
-   *  auto-crops to the sprite's true bounds (used by the full-sprite modal,
-   *  where some costumes exceed the fixed preview canvas). */
-  canvas?: string | null;
+  /** The render canvas, or null to omit the param entirely — ragassets then
+   *  auto-crops to the sprite's true bounds, which is what a download wants.
+   *  Taken as metrics rather than the formatted string so a caller that also
+   *  needs the anchor (the effect overlay does) holds one value, not a pair it
+   *  has to keep in agreement. */
+  canvas?: CanvasMetrics | string | null;
 };
 
 function renderParams(state: State, overrides: RenderOverrides): URLSearchParams {
@@ -363,7 +396,10 @@ function renderParams(state: State, overrides: RenderOverrides): URLSearchParams
     ? (overrides.headDir ?? state.headDir)
     : 0;
   p.set("headdir", String(headDir));
-  if (overrides.canvas !== null) p.set("canvas", overrides.canvas ?? CANVAS);
+  if (overrides.canvas !== null) {
+    const canvas = overrides.canvas ?? CANVAS_METRICS;
+    p.set("canvas", typeof canvas === "string" ? canvas : canvasSpec(canvas));
+  }
   p.set("v", CACHE_BUST);
   return p;
 }
@@ -409,9 +445,11 @@ export function frameCountProbeUrl(state: State, action: number = state.action):
 
 // How far each pose's lowest pixel drops below the origin (the ground point),
 // measured from ragassets. Used to bottom-align the character in its action
-// icon so the feet land near the button's bottom edge for every pose. Sit and
-// dead drop further; dead also lies wide, which the fixed canvas width allows.
-const ACTION_BELOW_ORIGIN: Record<number, number> = {
+// icon so the feet land near the button's bottom edge for every pose, and as the
+// full-sprite viewer's fallback for placing the feet when it cannot read the
+// drawn pixels. Sit and dead drop further; dead also lies wide, which the fixed
+// canvas width allows.
+export const ACTION_BELOW_ORIGIN: Record<number, number> = {
   0: 10, 1: 9, 2: 16, 3: 8, 4: 8, 5: 8, 10: 8, 11: 9, 12: 8, 6: 10, 7: 7, 8: 17, 9: 10,
 };
 
